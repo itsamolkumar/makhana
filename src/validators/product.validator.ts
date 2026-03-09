@@ -13,7 +13,7 @@ export const createProductValidator = z.object({
 
   category: z.string(),
 
-  images: z.array(z.string()).optional(),
+  images: z.array(z.string()).min(1).optional(),
 
   weight: z.string(),
 

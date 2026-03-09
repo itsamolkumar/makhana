@@ -3,8 +3,8 @@ import { NextRequest } from "next/server";
 import { connectDB } from "@/lib/db";
 
 import User from "@/models/user.model";
-import Otp from "@/models/otp.model";
-import { verifyOtpValidator } from "@/validators/otp.validator";
+
+import { verifyGoogleToken } from "@/lib/googleAuth";
 
 import { generateAccessToken, generateRefreshToken } from "@/lib/jwt";
 
@@ -19,48 +19,35 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
-    const { email, otp } = verifyOtpValidator.parse(body);
+    const { token } = body;
 
-    const otpRecord = await Otp.findOne({
+    const payload: any = await verifyGoogleToken(token);
 
-      email,
-      type: "signup"
+    if (!payload) {
 
-    });
-
-    if (!otpRecord) {
-
-      return apiError("OTP not found", 400);
+      return apiError("Invalid Google token", 401);
 
     }
 
-    if (otpRecord.otp !== otp) {
+    const { email, name, picture } = payload;
 
-      return apiError("Invalid OTP", 400);
-
-    }
-
-    if (otpRecord.expiresAt < new Date()) {
-
-      return apiError("OTP expired", 400);
-
-    }
-
-    const user = await User.findOne({ email });
+    let user = await User.findOne({ email });
 
     if (!user) {
 
-      return apiError("User not found", 404);
+      user = await User.create({
+
+        name,
+        email,
+        image: picture,
+        role: "user",
+        isVerified: true
+
+      });
 
     }
 
-    user.isVerified = true;
-
-    await user.save();
-
-    await Otp.deleteMany({ email });
-
-    const payload = {
+    const jwtPayload = {
 
       userId: user._id.toString(),
       email: user.email,
@@ -69,15 +56,15 @@ export async function POST(req: NextRequest) {
 
     };
 
-    const accessToken = generateAccessToken(payload);
+    const accessToken = generateAccessToken(jwtPayload);
 
-    const refreshToken = generateRefreshToken(payload);
+    const refreshToken = generateRefreshToken(jwtPayload);
 
     const response = apiSuccess(
 
       { user },
 
-      "Email verified successfully"
+      "Google login successful"
 
     );
 
@@ -103,7 +90,9 @@ export async function POST(req: NextRequest) {
 
     return response;
 
-  } catch (error) {
+  }
+
+  catch (error) {
 
     return handleError(error);
 

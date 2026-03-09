@@ -4,20 +4,19 @@ import { verifyToken } from "@/lib/jwt";
 
 import { apiError } from "@/utils/apiResponse";
 
-
 export async function authMiddleware(req: NextRequest) {
 
   try {
 
-    const token = req.cookies.get("token")?.value;
+    const accessToken = req.cookies.get("accessToken")?.value;
 
-    if (!token) {
+    if (!accessToken) {
 
       return apiError("Unauthorized", 401);
 
     }
 
-    const decoded = verifyToken(token);
+    const decoded = verifyToken(accessToken);
 
     if (!decoded) {
 
@@ -27,7 +26,9 @@ export async function authMiddleware(req: NextRequest) {
 
     return decoded;
 
-  } catch (error) {
+  }
+
+  catch {
 
     return apiError("Authentication failed", 401);
 

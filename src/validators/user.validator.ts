@@ -2,26 +2,15 @@ import { z } from "zod";
 
 export const registerValidator = z.object({
 
-  name: z
-    .string()
-    .min(2)
-    .max(50),
+  name: z.string().min(2).max(50),
 
-  email: z
-    .string()
-    .email(),
+  email: z.string().email(),
 
-  password: z
-    .string()
-    .min(6),
+  password: z.string().min(6),
 
-  mobile: z
-    .string()
-    .min(10)
-    .max(10)
-    .optional()
+  mobile: z.string().min(10).max(10)
+
 });
-
 
 export const loginValidator = z.object({
 
