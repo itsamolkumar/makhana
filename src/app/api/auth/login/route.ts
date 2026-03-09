@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
+import bcrypt from "bcryptjs";
 
 import { connectDB } from "@/lib/db";
 
 import User from "@/models/user.model";
-import Otp from "@/models/otp.model";
-import { verifyOtpValidator } from "@/validators/otp.validator";
+import { loginValidator } from "@/validators/user.validator";
 
 import { generateAccessToken, generateRefreshToken } from "@/lib/jwt";
 
@@ -19,53 +19,36 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
-    const { email, otp } = verifyOtpValidator.parse(body);
+    const { email, password } = loginValidator.parse(body);
 
-    const otpRecord = await Otp.findOne({
-
-      email,
-      type: "signup"
-
-    });
-
-    if (!otpRecord) {
-
-      return apiError("OTP not found", 400);
-
-    }
-
-    if (otpRecord.otp !== otp) {
-
-      return apiError("Invalid OTP", 400);
-
-    }
-
-    if (otpRecord.expiresAt < new Date()) {
-
-      return apiError("OTP expired", 400);
-
-    }
-
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select("+password");
 
     if (!user) {
 
-      return apiError("User not found", 404);
+      return apiError("Invalid credentials", 401);
 
     }
 
-    user.isVerified = true;
+    if (!user.isVerified) {
 
-    await user.save();
+      return apiError("Email not verified", 403);
 
-    await Otp.deleteMany({ email });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+
+      return apiError("Invalid credentials", 401);
+
+    }
 
     const payload = {
 
       userId: user._id.toString(),
       email: user.email,
       role: user.role,
-      isVerified: true
+      isVerified: user.isVerified
 
     };
 
@@ -77,7 +60,7 @@ export async function POST(req: NextRequest) {
 
       { user },
 
-      "Email verified successfully"
+      "Login successful"
 
     );
 

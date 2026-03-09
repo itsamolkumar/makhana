@@ -14,7 +14,8 @@ export interface IUser {
   role: "user" | "deliveryBoy" | "admin";
 
   image?: string;
-
+  isVerified: boolean;
+  tokenVersion: number;
   addresses?: {
     fullName: string;
     mobile: string;
@@ -64,6 +65,14 @@ const userSchema = new Schema<IUser>(
 
     image: {
       type: String
+    },
+    isVerified: {
+      type: Boolean,
+      default: false
+    },
+    tokenVersion: {
+      type: Number,
+      default: 0
     },
 
     addresses: [

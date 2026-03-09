@@ -2,23 +2,15 @@ import { z } from "zod";
 
 export const createOrderValidator = z.object({
 
-  orderItems: z.array(
-
-    z.object({
-
-      product: z.string(),
-
-      name: z.string(),
-
-      price: z.number(),
-
-      quantity: z.number().min(1),
-
-      image: z.string().optional()
-
-    })
-
-  ),
+orderItems: z.array(
+  z.object({
+    product: z.string(),
+    name: z.string(),
+    price: z.number(),
+    quantity: z.number().min(1),
+    image: z.string().optional()
+  })
+).min(1),
 
   shippingAddress: z.object({
 
