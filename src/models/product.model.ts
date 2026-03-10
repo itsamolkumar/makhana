@@ -1,8 +1,7 @@
 import mongoose, { Schema, model, models } from "mongoose";
 
 export interface IProduct {
-  _id?: mongoose.Types.ObjectId;
-
+_id?: mongoose.Types.ObjectId;
   name: string;
 
   slug: string;
@@ -11,95 +10,142 @@ export interface IProduct {
 
   price: number;
 
-  discountPrice?: number;
-
   category: string;
 
-  images: string[];
+  images?: string[];
 
   weight: string;
 
   stock: number;
 
-  rating?: number;
+  ratings: number;
 
-  numReviews?: number;
+  numReviews: number;
 
-  isFeatured?: boolean;
+  isActive: boolean;
+
 }
 
 const productSchema = new Schema<IProduct>(
+
   {
+
     name: {
+
       type: String,
+
       required: true,
+
       trim: true
+
     },
 
     slug: {
+
       type: String,
+
       required: true,
+
       unique: true,
-      index: true
+
+      trim: true
+
     },
 
     description: {
+
       type: String
+
     },
 
     price: {
-      type: Number,
-      required: true
-    },
 
-    discountPrice: {
-      type: Number
+      type: Number,
+
+      required: true
+
     },
 
     category: {
+
       type: String,
-      required: true,
-      index: true
+
+      required: true
+
     },
 
     images: [
+
       {
+
         type: String
+
       }
+
     ],
 
     weight: {
+
       type: String,
+
       required: true
+
     },
 
     stock: {
+
       type: Number,
+
+      required: true,
+
       default: 0
+
     },
 
-    rating: {
+    ratings: {
+
       type: Number,
+
       default: 0
+
     },
 
     numReviews: {
+
       type: Number,
+
       default: 0
+
     },
 
-    isFeatured: {
+    isActive: {
+
       type: Boolean,
-      default: false
+
+      default: true
+
     }
+
   },
+
   {
+
     timestamps: true
+
   }
+
 );
 
-// Search optimization
-productSchema.index({ name: "text", description: "text" });
+
+// Indexes for performance
+
+productSchema.index({ slug: 1 });
+
+productSchema.index({ category: 1 });
+
+productSchema.index({ createdAt: -1 });
+
+productSchema.index({ price: 1 });
 
 const Product = models.Product || model("Product", productSchema);
 
