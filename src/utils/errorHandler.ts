@@ -35,6 +35,19 @@ export function handleError(error: any) {
 
   }
 
+  // Authentication errors
+  if (error.message === "Unauthorized" || error.message === "Invalid token" || error.message === "Authentication failed") {
+    return NextResponse.json(
+      {
+        success: false,
+        message: error.message
+      },
+      {
+        status: 401
+      }
+    );
+  }
+
   // Default server error
   return NextResponse.json(
     {

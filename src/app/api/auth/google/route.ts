@@ -1,101 +1,101 @@
 import { NextRequest } from "next/server";
-
 import { connectDB } from "@/lib/db";
-
 import User from "@/models/user.model";
-
-import { verifyGoogleToken } from "@/lib/googleAuth";
-
 import { generateAccessToken, generateRefreshToken } from "@/lib/jwt";
-
 import { apiSuccess, apiError } from "@/utils/apiResponse";
 import { handleError } from "@/utils/errorHandler";
+import axios from "axios";
 
 export async function POST(req: NextRequest) {
-
   try {
-
     await connectDB();
-
     const body = await req.json();
+    const { credential } = body;
 
-    const { token } = body;
-
-    const payload: any = await verifyGoogleToken(token);
-
-    if (!payload) {
-
-      return apiError("Invalid Google token", 401);
-
+    if (!credential) {
+      return apiError("No Google token provided", 400);
     }
 
-    const { email, name, picture } = payload;
+    // Fetch user info from Google using the access token
+    const googleResponse = await axios.get(
+      "https://www.googleapis.com/oauth2/v3/userinfo",
+      {
+        headers: {
+          Authorization: `Bearer ${credential}`,
+        },
+      }
+    );
 
+    const googleUser = googleResponse.data;
+
+    if (!googleUser || !googleUser.email) {
+      return apiError("Invalid Google token or missing email", 401);
+    }
+
+    const { email, name, picture } = googleUser;
+
+    // Check if user exists
     let user = await User.findOne({ email });
 
     if (!user) {
-
+      // Create new user if they don't exist
       user = await User.create({
-
         name,
         email,
         image: picture,
+        isVerified: true, // Google emails are pre-verified
         role: "user",
-        isVerified: true
-
       });
-
+    } else {
+      // If user exists but is somehow not verified, mark them verified now
+      if (!user.isVerified) {
+        user.isVerified = true;
+        await user.save();
+      }
     }
 
-    const jwtPayload = {
-
+    const payload = {
       userId: user._id.toString(),
       email: user.email,
       role: user.role,
-      isVerified: true
-
+      isVerified: user.isVerified
     };
 
-    const accessToken = generateAccessToken(jwtPayload);
+    const accessToken = generateAccessToken(payload);
+    const refreshToken = generateRefreshToken(payload);
 
-    const refreshToken = generateRefreshToken(jwtPayload);
+    const formattedUser = {
+      ...(user.toObject ? user.toObject() : user),
+      id: user._id.toString()
+    };
 
     const response = apiSuccess(
-
-      { user },
-
-      "Google login successful"
-
+      { user: formattedUser },
+      "Google Login successful"
     );
 
     response.cookies.set("accessToken", accessToken, {
-
       httpOnly: true,
-      secure: true,
+      secure: process.env.USE_SECURE_COOKIES === "true",
       sameSite: "strict",
       path: "/",
       maxAge: 60 * 15
-
     });
 
     response.cookies.set("refreshToken", refreshToken, {
-
       httpOnly: true,
-      secure: true,
+      secure: process.env.USE_SECURE_COOKIES === "true",
       sameSite: "strict",
       path: "/",
       maxAge: 60 * 60 * 24 * 7
-
     });
 
     return response;
 
-  }
-
-  catch (error) {
-
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+       return apiError("Google authentication failed", 401);
+    }
     return handleError(error);
-
   }
-
 }

@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+<<<<<<< HEAD
 
 import { connectDB } from "@/lib/db";
 
@@ -208,3 +209,75 @@ export async function GET(req: NextRequest) {
   }
 
 }
+=======
+import { connectDB } from "@/lib/db";
+import Product from "@/models/product.model";
+import { apiSuccess, apiError } from "@/utils/apiResponse";
+import { handleError } from "@/utils/errorHandler";
+
+export async function GET(req: NextRequest) {
+  try {
+    await connectDB();
+
+    const searchParams = req.nextUrl.searchParams;
+    const search = searchParams.get("search") || "";
+    const category = searchParams.get("category") || "";
+    const minPrice = searchParams.get("minPrice");
+    const maxPrice = searchParams.get("maxPrice");
+    const sort = searchParams.get("sort") || "-createdAt"; // Default new first
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "12");
+
+    const query: any = {};
+
+    // 1. Search filter
+    if (search) {
+      query.$text = { $search: search };
+    }
+
+    // 2. Category filter
+    if (category && category !== "all") {
+      query.category = category;
+    }
+
+    // 3. Price filter
+    if (minPrice || maxPrice) {
+      query.price = {};
+      if (minPrice) query.price.$gte = Number(minPrice);
+      if (maxPrice) query.price.$lte = Number(maxPrice);
+    }
+
+    // Pagination bounds
+    const skip = (page - 1) * limit;
+
+    const products = await Product.find(query)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const total = await Product.countDocuments(query);
+
+    // Map _id to id and add frontend helpers
+    const formattedProducts = products.map((p: any) => {
+      p.id = p._id.toString();
+      p.inStock = p.stock > 0;
+      delete p._id; // Clean up
+      return p;
+    });
+
+    return apiSuccess({
+      products: formattedProducts,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    }, "Products fetched successfully");
+
+  } catch (error) {
+    return handleError(error);
+  }
+}
+>>>>>>> 0563ed2 (adding authentication ui using gravity)

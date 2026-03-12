@@ -56,32 +56,30 @@ export async function POST(req: NextRequest) {
 
     const refreshToken = generateRefreshToken(payload);
 
+    const formattedUser = {
+      ...(user.toObject ? user.toObject() : user),
+      id: user._id.toString()
+    };
+
     const response = apiSuccess(
-
-      { user },
-
+      { user: formattedUser },
       "Login successful"
-
     );
 
     response.cookies.set("accessToken", accessToken, {
-
       httpOnly: true,
-      secure: true,
+      secure: process.env.USE_SECURE_COOKIES === "true",
       sameSite: "strict",
       path: "/",
       maxAge: 60 * 15
-
     });
 
     response.cookies.set("refreshToken", refreshToken, {
-
       httpOnly: true,
-      secure: true,
+      secure: process.env.USE_SECURE_COOKIES === "true",
       sameSite: "strict",
       path: "/",
       maxAge: 60 * 60 * 24 * 7
-
     });
 
     return response;
