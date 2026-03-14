@@ -12,6 +12,30 @@ import { apiSuccess, apiError } from "@/utils/apiResponse";
 
 import { handleError } from "@/utils/errorHandler";
 
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    await connectDB();
+    const { id } = params;
+
+    // Search by either _id (if valid ObjectId) or slug
+    const query = id.length === 24 && /^[0-9a-fA-F]{24}$/.test(id) 
+      ? { _id: id, isActive: true }
+      : { slug: id, isActive: true };
+
+    const product = await Product.findOne(query).lean();
+
+    if (!product) {
+      return apiError("Product not found", 404);
+    }
+
+    return apiSuccess({ product }, "Product fetched successfully");
+  } catch (error) {
+    return handleError(error);
+  }
+}
 
 export async function PATCH(
 
