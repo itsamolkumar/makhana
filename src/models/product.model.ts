@@ -1,7 +1,8 @@
 import mongoose, { Schema, model, models } from "mongoose";
+import { PRODUCT_CATEGORIES, ProductCategory } from "@/constants/productCategories";
 
 export interface IProduct {
-_id?: mongoose.Types.ObjectId;
+  _id?: mongoose.Types.ObjectId;
   name: string;
 
   slug: string;
@@ -10,7 +11,9 @@ _id?: mongoose.Types.ObjectId;
 
   price: number;
 
-  category: string;
+  discountPrice?: number;
+
+  category: ProductCategory;
 
   images?: string[];
 
@@ -66,11 +69,19 @@ const productSchema = new Schema<IProduct>(
 
     },
 
+    discountPrice: {
+
+      type: Number
+
+    },
+
     category: {
 
       type: String,
 
-      required: true
+      required: true,
+
+      enum: PRODUCT_CATEGORIES
 
     },
 

@@ -2,13 +2,22 @@
 
 import { useState } from "react";
 import { loginUser, googleLoginUser, resendOtp } from "@/services/authService";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { loginStart, loginSuccess, loginFailure } from "@/redux/slices/authSlice";
 import { useGoogleLogin } from "@react-oauth/google";
 
 export default function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirectTo") || "/";
+  const postLoginRedirect = () => {
+    if (redirectTo && redirectTo !== "/") {
+      router.push(redirectTo);
+    } else {
+      router.back();
+    }
+  };
   const dispatch = useAppDispatch();
   const { loading, error: reduxError } = useAppSelector((state) => state.auth);
 
@@ -32,7 +41,7 @@ export default function LoginForm() {
       if (response.data?.data?.user) {
         dispatch(loginSuccess(response.data.data.user));
       }
-      router.push("/");
+      postLoginRedirect();
     } catch (err: any) {
       const errMessage = err.response?.data?.message || "Invalid email or password";
       setLocalError(errMessage);
@@ -71,7 +80,7 @@ export default function LoginForm() {
         if (response.data?.data?.user) {
           dispatch(loginSuccess(response.data.data.user));
         }
-        router.push("/");
+        postLoginRedirect();
       } catch (err: any) {
         const errMessage = err.response?.data?.message || "Google login failed";
         setLocalError(errMessage);

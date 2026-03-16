@@ -16,12 +16,12 @@ export async function POST(req: NextRequest) {
       return apiError("Email is required", 400);
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select("+password");
 
     if (!user) {
       return apiError("No account found with that email", 404);
     }
-    
+    console.log(user);
     // Check if user is a Google auth user without a password
     if (user.password === undefined || user.password === null) {
       return apiError("This account uses Google Login. Please sign in with Google.", 400);

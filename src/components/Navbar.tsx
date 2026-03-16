@@ -6,7 +6,7 @@ import { Menu, X, ShoppingCart, User, LogOut, Settings, Package, ChevronRight } 
 import Link from "next/link";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
 import { logoutUser } from "@/redux/slices/authSlice";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
@@ -15,9 +15,15 @@ export default function Navbar() {
   
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   // Redux state
   const { isAuthenticated, isInitialized, user } = useAppSelector((state) => state.auth);
+
+  // Current path for redirect
+  const currentPath = `${pathname}${searchParams?.toString() ? `?${searchParams.toString()}` : ""}`;
+  const loginUrl = `/login?redirectTo=${encodeURIComponent(currentPath)}`;
   const { items } = useAppSelector((state) => state.cart);
   
   const cartItemCount = items.reduce((total, item) => total + item.quantity, 0);
@@ -148,7 +154,7 @@ export default function Navbar() {
               </>
             ) : (
               <div className="flex items-center gap-3 ml-2">
-                <Link href="/login" className="text-sm font-medium hover:text-[var(--color-primary)] transition">
+                <Link href={loginUrl} className="text-sm font-medium hover:text-[var(--color-primary)] transition">
                   Login
                 </Link>
                 <Link href="/register" className="text-sm font-medium bg-[var(--color-primary)] text-white px-4 py-2 rounded-full hover:bg-[#244a40] transition shadow-md hover:shadow-lg">
@@ -237,7 +243,7 @@ export default function Navbar() {
               ) : (
                 <div className="flex flex-col gap-3">
                   <Link
-                    href="/login"
+                    href={loginUrl}
                     onClick={() => setOpen(false)}
                     className="w-full bg-white border-2 border-gray-200 text-gray-800 py-4 rounded-2xl text-center font-bold text-lg hover:border-gray-300 hover:bg-gray-50 transition drop-shadow-sm"
                   >

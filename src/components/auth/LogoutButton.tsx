@@ -1,7 +1,7 @@
 "use client";
 
 import { logoutUser } from "@/redux/slices/authSlice";
-import { logoutUserAPI } from "@/services/authService";
+import { logoutUser as logoutUserAPI } from "@/services/authService";
 import { useAppDispatch } from "@/redux/hooks";
 import { useRouter } from "next/navigation";
 

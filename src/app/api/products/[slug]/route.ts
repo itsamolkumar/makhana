@@ -1,18 +1,19 @@
 import { NextRequest } from "next/server";
 import { connectDB } from "@/lib/db";
-import Product from "@/models/Product";
+import Product from "@/models/product.model";
 import { apiSuccess, apiError } from "@/utils/apiResponse";
 import { handleError } from "@/utils/errorHandler";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { slug: string } }
+  context: { params: Promise<{ slug: string }> }
 ) {
   try {
     await connectDB();
 
+    const { slug } = await context.params;
     const product = await Product.findOne({
-      slug: params.slug,
+      slug,
       isActive: true,
     }).lean();
 

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { connectDB } from "@/lib/db";
-import Product from "@/models/Product";
+import Product from "@/models/product.model";
 import { apiSuccess } from "@/utils/apiResponse";
 import { handleError } from "@/utils/errorHandler";
 
