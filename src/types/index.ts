@@ -1,3 +1,15 @@
+export interface Address {
+  _id?: string;
+  fullName: string;
+  mobile: string;
+  pincode: string;
+  state: string;
+  city: string;
+  area: string;
+  landmark?: string;
+  isDefault?: boolean;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -5,6 +17,7 @@ export interface User {
   mobile?: string;
   role?: 'user' | 'admin';
   profile_image?: string;
+  addresses?: Address[];
 }
 
 export interface Product {

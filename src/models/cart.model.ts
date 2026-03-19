@@ -71,11 +71,7 @@ const cartSchema = new Schema<ICart>(
   }
 );
 
-
-// Index for faster cart lookup
-
-cartSchema.index({ user: 1 });
-
+// Index for faster cart lookup (removed duplicate - unique: true already creates index)
 
 const Cart = models.Cart || model("Cart", cartSchema);
 

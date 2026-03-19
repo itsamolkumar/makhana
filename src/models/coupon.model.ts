@@ -105,7 +105,7 @@ const couponSchema = new Schema<ICoupon>(
 
 );
 
-couponSchema.index({ code: 1 });
+// Index for faster coupon lookup (removed duplicate - unique: true already creates index)
 
 const Coupon = models.Coupon || model("Coupon", couponSchema);
 

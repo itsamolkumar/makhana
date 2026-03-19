@@ -61,6 +61,9 @@ export async function POST(req: NextRequest) {
       id: user._id.toString()
     };
 
+    console.log("Login: Formatted user:", formattedUser);
+    console.log("Login: User addresses:", formattedUser.addresses);
+
     const response = apiSuccess(
       { user: formattedUser },
       "Login successful"

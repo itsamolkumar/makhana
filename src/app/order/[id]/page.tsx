@@ -4,15 +4,140 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Order } from "@/types";
+import toast from "react-hot-toast";
 
 export default function OrderPage() {
   const params = useParams();
   const router = useRouter();
   const orderId = (params as any)?.id;
 
-  const [order, setOrder] = useState<Order | null>(null);
+  const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paying, setPaying] = useState(false);
+
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  const handlePayNow = async () => {
+    setPaying(true);
+    try {
+      const isLoaded = await loadRazorpayScript();
+      if (!isLoaded) {
+        toast.error("Razorpay SDK failed to load. Are you online?");
+        setPaying(false);
+        return;
+      }
+
+      const createRes = await fetch("/api/payment/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: order.totalPrice }),
+      });
+
+      const orderDataResult = await createRes.json();
+      
+      if (!createRes.ok) {
+        toast.error(orderDataResult?.message || "Failed to initialize payment");
+        setPaying(false);
+        return;
+      }
+
+      const { orderId: rzp_order_id, amount, keyId } = orderDataResult.data;
+
+      const options = {
+        key: keyId, 
+        amount: amount.toString(),
+        currency: "INR",
+        name: "Health e Bites",
+        description: `Order #${order._id.slice(-8).toUpperCase()}`,
+        image: "/makhana-premium1.png", 
+        order_id: rzp_order_id,
+        handler: async function (response: any) {
+          try {
+             toast.loading("Verifying payment...", { id: "verify-toast" }); // Better UX
+             const verifyRes = await fetch("/api/payment/verify", {
+               method: "POST",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify({
+                 razorpay_payment_id: response.razorpay_payment_id,
+                 razorpay_order_id: response.razorpay_order_id,
+                 razorpay_signature: response.razorpay_signature,
+                 dbOrderId: order._id
+               })
+             });
+             
+             if (verifyRes.ok) {
+               toast.success("Payment successful!", { id: "verify-toast" });
+               window.location.reload();
+             } else {
+               const errorData = await verifyRes.json();
+               toast.error(errorData?.message || "Payment verification failed", { id: "verify-toast" });
+               await fetch("/api/payment/fail", {
+                 method: "POST",
+                 headers: { "Content-Type": "application/json" },
+                 body: JSON.stringify({ dbOrderId: order._id, error_description: "Signature mismatch" })
+               });
+               setPaying(false);
+               window.location.reload();
+             }
+          } catch (error) {
+             console.error("Verification error", error);
+             toast.error("An error occurred during verification", { id: "verify-toast" });
+             setPaying(false);
+          }
+        },
+        prefill: {
+          name: order.shippingAddress.fullName,
+          contact: order.shippingAddress.mobile,
+        },
+        theme: {
+          color: "#16a34a",
+        },
+        modal: {
+          ondismiss: async function() {
+            setPaying(false);
+            toast.error("Payment cancelled.");
+            await fetch("/api/payment/fail", {
+               method: "POST",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify({ dbOrderId: order._id, error_description: "User closed modal" })
+            });
+            window.location.reload();
+          }
+        }
+      };
+
+      const paymentObject = new (window as any).Razorpay(options);
+      paymentObject.on("payment.failed", async function (response: any) {
+           toast.error(response.error.description || "Payment failed");
+           setPaying(false);
+           await fetch("/api/payment/fail", {
+               method: "POST",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify({ 
+                  dbOrderId: order._id, 
+                  error_description: response.error.description,
+                  razorpay_payment_id: response.error.metadata?.payment_id
+               })
+           });
+           paymentObject.close();
+      });
+      paymentObject.open();
+
+    } catch (error) {
+       console.error(error);
+       toast.error("Something went wrong");
+       setPaying(false);
+    }
+  };
 
   useEffect(() => {
     if (!orderId) return;
@@ -115,8 +240,8 @@ export default function OrderPage() {
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <h2 className="text-xl font-semibold mb-4">Items</h2>
               <div className="space-y-4">
-                {order.orderItems.map((item) => (
-                  <div key={`${item.product}-${item.quantity}`} className="flex items-center gap-4">
+                {order.orderItems.map((item: any, index: number) => (
+                  <div key={`item-${index}`} className="flex items-center gap-4">
                     {item.image ? (
                       <img src={item.image} alt={item.name} className="w-16 h-16 rounded-lg object-cover" />
                     ) : (
@@ -158,6 +283,21 @@ export default function OrderPage() {
                 <span>₹{order.totalPrice}</span>
               </div>
             </div>
+
+            {order.paymentMethod === "razorpay" && order.paymentStatus !== "paid" && (
+              <div className="mt-6 pt-6 border-t border-gray-100">
+                <div className="bg-orange-50 text-orange-800 p-4 rounded-xl mb-4 text-sm font-medium">
+                  Payment is pending or failed. Please complete your payment to process this order.
+                </div>
+                <button
+                  onClick={handlePayNow}
+                  disabled={paying}
+                  className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold hover:opacity-90 disabled:opacity-50 transition"
+                >
+                  {paying ? "Loading..." : "Pay Now"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

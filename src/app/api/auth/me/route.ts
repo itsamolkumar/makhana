@@ -19,17 +19,24 @@ export async function GET(req: NextRequest) {
 
     if (!decoded) return;
 
-    const user = await User.findById(decoded.userId).select("-password").lean();
+    const user = await User.findById(decoded.userId).select("-password");
     console.log("Database User found:", user);
 
     if (!user) {
       return apiSuccess({ user: null }, "User not found in DB");
     }
 
-    const formattedUser = {
+    const formattedUser = user.toObject ? user.toObject() : {
       ...user,
       id: user._id.toString()
     };
+    
+    // Ensure id is set
+    if (!formattedUser.id) {
+      formattedUser.id = formattedUser._id?.toString() || "";
+    }
+
+    console.log("Formatted user with addresses:", formattedUser);
 
     return apiSuccess({ user: formattedUser }, "User fetched successfully");
 

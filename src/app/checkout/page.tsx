@@ -31,6 +31,14 @@ export default function CheckoutPage() {
   const dispatch = useAppDispatch();
   const router = useRouter();
 
+  // Debug logging
+  useEffect(() => {
+    console.log("=== CHECKOUT PAGE ===");
+    console.log("User from Redux:", user);
+    console.log("User addresses from Redux:", user?.addresses);
+    console.log("User addresses length:", user?.addresses?.length);
+  }, [user]);
+
   // Require authentication
   const { isChecking, isAuthorized } = useRequireAuth("/checkout");
 
@@ -54,21 +62,31 @@ export default function CheckoutPage() {
   const [selectedAddress, setSelectedAddress] = useState<string>("");
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<"razorpay" | "cod" | "upi" | "netbanking">("cod");
   const [loading, setLoading] = useState(false);
+  const [placingOrder, setPlacingOrder] = useState(false);
 
-  // Redirect to cart if no items
+  // Log whenever addresses state changes
   useEffect(() => {
-    if (items.length === 0 && isAuthorized) {
+    console.log("=== ADDRESSES STATE CHANGED ===");
+    console.log("Addresses state now:", addresses);
+    console.log("Addresses count:", addresses.length);
+    console.log("Selected address index:", selectedAddress);
+  }, [addresses]);
+
+  // Redirect to cart if no items (but not during order placement)
+  useEffect(() => {
+    if (items.length === 0 && isAuthorized && !placingOrder) {
       router.push("/cart");
     }
-  }, [items.length, isAuthorized, router]);
+  }, [items.length, isAuthorized, placingOrder, router]);
 
   // Load user addresses when authorized
   useEffect(() => {
     if (isAuthorized) {
       fetchUserAddresses();
     }
-  }, [isAuthorized]);
+  }, [isAuthorized, user]);
 
   // Update final total when coupon changes
   useEffect(() => {
@@ -79,21 +97,54 @@ export default function CheckoutPage() {
 
   const fetchUserAddresses = async () => {
     try {
+      console.log("========== fetchUserAddresses STARTED ==========");
+      console.log("Called at:", new Date().toLocaleTimeString());
+      console.log("User object:", user);
+      console.log("User addresses from Redux:", user?.addresses);
+      
+      console.log("Fetching from /api/user/addresses...");
       const res = await fetch("/api/user/addresses");
+      const data = await res.json();
+      
+      console.log("API Response status:", res.status);
+      console.log("API Response OK:", res.ok);
+      console.log("Full API Response:", data);
+      
       if (res.ok) {
-        const data = await res.json();
-        const addressList = data.data?.addresses || [];
-        setAddresses(addressList);
-        // Set default address if available, otherwise select the first one
-        const defaultAddr = addressList?.find((addr: Address) => addr.isDefault);
-        if (defaultAddr) {
-          setSelectedAddress(addressList.indexOf(defaultAddr).toString());
-        } else if (addressList?.length) {
-          setSelectedAddress("0");
+        // Handle both data.addresses and data.data.addresses
+        const addressList = data.addresses || data.data?.addresses || [];
+        console.log("Extracted addressList:", addressList);
+        console.log("Address list length:", addressList?.length);
+        
+        if (addressList && addressList.length > 0) {
+          console.log(`✓ Found ${addressList.length} addresses from API`);
+          console.log("Setting addresses state to:", addressList);
+          setAddresses(addressList);
+          
+          // Set default address if available, otherwise select the first one
+          const defaultAddr = addressList.find((addr: Address) => addr.isDefault);
+          if (defaultAddr) {
+            console.log("✓ Found default address:", defaultAddr);
+            setSelectedAddress(addressList.indexOf(defaultAddr).toString());
+          } else {
+            console.log("✓ No default address found, selecting first (index 0)");
+            setSelectedAddress("0");
+          }
+        } else {
+          console.warn("✗ No addresses found in API response (empty array)");
+          setAddresses([]);
+          setSelectedAddress("");
         }
+      } else {
+        console.error("✗ API returned error:", res.status, data);
+        setAddresses([]);
+        setSelectedAddress("");
       }
+      console.log("========== fetchUserAddresses COMPLETED ==========\n");
     } catch (error) {
-      console.error("Failed to fetch addresses", error);
+      console.error("✗ Exception in fetchUserAddresses:", error);
+      setAddresses([]);
+      setSelectedAddress("");
     }
   };
 
@@ -265,6 +316,16 @@ export default function CheckoutPage() {
     toast.success("Coupon removed");
   };
 
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handlePlaceOrder = async () => {
     if (!selectedAddress) {
       toast.error("Please select a delivery address");
@@ -272,31 +333,160 @@ export default function CheckoutPage() {
     }
 
     setLoading(true);
+    setPlacingOrder(true);
     try {
       const shippingAddress = addresses[Number(selectedAddress)];
       const orderData = {
+        orderItems: items.map(item => ({
+          product: item.product._id || item.product.id,
+          name: item.product.name,
+          price: item.product.price,
+          quantity: item.quantity,
+          image: item.product.images?.[0],
+          sku: item.product.sku
+        })),
         shippingAddress,
+        paymentMethod,
         couponCode: appliedCoupon?.coupon,
-        userDetails: { name: shippingAddress.fullName, email: user?.email, mobile: shippingAddress.mobile },
+        notes: "",
       };
 
+      // 1. Create order in DB FIRST
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(orderData),
       });
 
-      if (res.ok) {
-        const order = await res.json();
-        dispatch(clearCart());
-        toast.success("Order placed successfully!");
-        router.push(`/order/${order.order._id}`);
+      if (!res.ok) {
+        const errorData = await res.json();
+        toast.error(errorData?.message || "Failed to create order");
+        setPlacingOrder(false);
+        setLoading(false);
+        return;
+      }
+
+      const responseData = await res.json();
+      const dbOrderId = responseData.data.order._id;
+      
+      // Order created successfully, clear cart.
+      dispatch(clearCart());
+
+      if (paymentMethod === "razorpay") {
+        const isLoaded = await loadRazorpayScript();
+        if (!isLoaded) {
+          toast.error("Razorpay SDK failed to load. You can pay later from your Orders page.");
+          router.push(`/order/${dbOrderId}`);
+          return;
+        }
+
+        const createRes = await fetch("/api/payment/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: finalTotal }),
+        });
+
+        const orderDataResult = await createRes.json();
+        
+        if (!createRes.ok) {
+          toast.error(orderDataResult?.message || "Failed to initialize payment.");
+          await fetch("/api/payment/fail", {
+             method: "POST",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify({ dbOrderId, error_description: "Failed to initialize razorpay model" })
+          });
+          router.push(`/order/${dbOrderId}`);
+          return;
+        }
+
+        const { orderId: rzp_order_id, amount, keyId } = orderDataResult.data;
+
+        const options = {
+          key: keyId, 
+          amount: amount.toString(),
+          currency: "INR",
+          name: "Health e Bites",
+          description: "Makhana Store Purchase",
+          image: "/makhana-premium1.png", 
+          order_id: rzp_order_id,
+          handler: async function (response: any) {
+            try {
+               toast.loading("Verifying payment...", { id: "verify-toast" });
+               const verifyRes = await fetch("/api/payment/verify", {
+                 method: "POST",
+                 headers: { "Content-Type": "application/json" },
+                 body: JSON.stringify({
+                   razorpay_payment_id: response.razorpay_payment_id,
+                   razorpay_order_id: response.razorpay_order_id,
+                   razorpay_signature: response.razorpay_signature,
+                   dbOrderId: dbOrderId
+                 })
+               });
+               
+               if (verifyRes.ok) {
+                 toast.success("Payment successful!", { id: "verify-toast" });
+                 router.push(`/order/${dbOrderId}`);
+               } else {
+                 const errorData = await verifyRes.json();
+                 toast.error(errorData?.message || "Payment verification failed", { id: "verify-toast" });
+                 await fetch("/api/payment/fail", {
+                   method: "POST",
+                   headers: { "Content-Type": "application/json" },
+                   body: JSON.stringify({ dbOrderId, error_description: "Signature mismatch" })
+                 });
+                 router.push(`/order/${dbOrderId}`);
+               }
+            } catch (error) {
+               console.error("Verification error", error);
+               toast.error("An error occurred during verification", { id: "verify-toast" });
+               router.push(`/order/${dbOrderId}`);
+            }
+          },
+          prefill: {
+            name: shippingAddress.fullName,
+            email: user?.email || "",
+            contact: shippingAddress.mobile,
+          },
+          theme: {
+            color: "#16a34a",
+          },
+          modal: {
+            ondismiss: async function() {
+              toast.error("Payment cancelled. You can complete it from your Orders page.");
+              await fetch("/api/payment/fail", {
+                 method: "POST",
+                 headers: { "Content-Type": "application/json" },
+                 body: JSON.stringify({ dbOrderId, error_description: "User closed modal" })
+              });
+              router.push(`/order/${dbOrderId}`);
+            }
+          }
+        };
+
+        const paymentObject = new (window as any).Razorpay(options);
+        paymentObject.on("payment.failed", async function (response: any) {
+             toast.error(response.error.description || "Payment failed");
+             await fetch("/api/payment/fail", {
+                 method: "POST",
+                 headers: { "Content-Type": "application/json" },
+                 body: JSON.stringify({ 
+                    dbOrderId, 
+                    error_description: response.error.description,
+                    razorpay_payment_id: response.error.metadata?.payment_id
+                 })
+             });
+             paymentObject.close();
+        });
+        paymentObject.open();
+
       } else {
-        toast.error("Failed to place order");
+        toast.success("Order placed successfully!");
+        router.push(`/order/${dbOrderId}`);
       }
     } catch (error) {
-      toast.error("Failed to place order");
-    } finally {
+      console.error("Order placement error:", error);
+      toast.error("Failed to process order");
+      setPlacingOrder(false);
       setLoading(false);
     }
   };
@@ -675,6 +865,44 @@ export default function CheckoutPage() {
               <div className="flex justify-between text-lg font-bold pt-3 border-t">
                 <span>Total</span>
                 <span>₹{finalTotal}</span>
+              </div>
+            </div>
+
+            {/* Payment Method Selection */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                💳 Payment Method
+              </h2>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 p-4 border rounded-xl cursor-pointer hover:bg-gray-50 transition">
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value="cod"
+                    checked={paymentMethod === "cod"}
+                    onChange={(e) => setPaymentMethod(e.target.value as "cod")}
+                    className="w-5 h-5 text-[var(--color-primary)] bg-gray-100 border-gray-300 focus:ring-[var(--color-primary)] focus:ring-2 mt-0.5 cursor-pointer flex-shrink-0"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">Cash on Delivery</div>
+                    <div className="text-sm text-gray-600">Pay when you receive your order</div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-4 border rounded-xl cursor-pointer hover:bg-gray-50 transition">
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value="razorpay"
+                    checked={paymentMethod === "razorpay"}
+                    onChange={(e) => setPaymentMethod(e.target.value as "razorpay")}
+                    className="w-5 h-5 text-[var(--color-primary)] bg-gray-100 border-gray-300 focus:ring-[var(--color-primary)] focus:ring-2 mt-0.5 cursor-pointer flex-shrink-0"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">Online Payment</div>
+                    <div className="text-sm text-gray-600">Pay securely with credit/debit card, UPI, or net banking</div>
+                  </div>
+                </label>
               </div>
             </div>
 

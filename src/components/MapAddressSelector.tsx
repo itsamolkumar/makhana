@@ -163,7 +163,7 @@ export default function MapAddressSelector({
       (error) => {
         setLoading(false);
         toast.error('Could not get your location');
-        console.error(error);
+        console.error('Geolocation error:', error.message || error.code || error);
       }
     );
   };

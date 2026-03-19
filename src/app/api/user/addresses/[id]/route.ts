@@ -24,7 +24,17 @@ export async function PUT(
     const userData = await User.findById(user.userId);
     if (!userData) return apiError("User not found", 404);
 
-    const addressIndex = userData.addresses.findIndex((addr: any) => addr._id.toString() === id);
+    // Find address by ObjectId or array index
+    let addressIndex = -1;
+    
+    // First try to find by ObjectId
+    addressIndex = userData.addresses.findIndex((addr: any) => addr._id?.toString() === id);
+    
+    // If not found and id is a valid array index, use that
+    if (addressIndex === -1 && !isNaN(Number(id)) && Number(id) >= 0 && Number(id) < userData.addresses.length) {
+      addressIndex = Number(id);
+    }
+
     if (addressIndex === -1) return apiError("Address not found", 404);
 
     // Update address fields
@@ -71,8 +81,17 @@ export async function DELETE(
     const userData = await User.findById(user.userId);
     if (!userData) return apiError("User not found", 404);
 
-    // Find and remove address
-    const addressIndex = userData.addresses.findIndex((addr: any) => addr._id.toString() === id);
+    // Find and remove address - support both ObjectId and array index
+    let addressIndex = -1;
+    
+    // First try to find by ObjectId
+    addressIndex = userData.addresses.findIndex((addr: any) => addr._id?.toString() === id);
+    
+    // If not found and id is a valid array index, use that
+    if (addressIndex === -1 && !isNaN(Number(id)) && Number(id) >= 0 && Number(id) < userData.addresses.length) {
+      addressIndex = Number(id);
+    }
+
     if (addressIndex === -1) return apiError("Address not found", 404);
 
     const isDefault = userData.addresses[addressIndex].isDefault;
