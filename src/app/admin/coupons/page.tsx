@@ -19,11 +19,11 @@ export default function CouponsPage() {
   const [formData, setFormData] = useState({
     code: "",
     discountType: "percentage" as "percentage" | "fixed",
-    discountValue: 0,
-    minOrder: 0,
-    maxDiscount: 0,
+    discountValue: "" as number | string,
+    minOrder: "" as number | string,
+    maxDiscount: "" as number | string,
     expiry: "",
-    usageLimit: 0
+    usageLimit: "" as number | string
   });
 
   const fetchCoupons = async () => {
@@ -57,12 +57,20 @@ export default function CouponsPage() {
         await updateCoupon({
           id: editingCoupon._id!,
           ...formData,
+          discountValue: Number(formData.discountValue),
+          minOrder: Number(formData.minOrder) || 0,
+          maxDiscount: Number(formData.maxDiscount) || 0,
+          usageLimit: formData.usageLimit ? Number(formData.usageLimit) : undefined,
           expiry: new Date(formData.expiry).toISOString()
         });
         toast.success("Coupon updated successfully");
       } else {
         await createCoupon({
           ...formData,
+          discountValue: Number(formData.discountValue),
+          minOrder: Number(formData.minOrder) || 0,
+          maxDiscount: Number(formData.maxDiscount) || 0,
+          usageLimit: formData.usageLimit ? Number(formData.usageLimit) : undefined,
           expiry: new Date(formData.expiry).toISOString()
         });
         toast.success("Coupon created successfully");
@@ -107,11 +115,11 @@ export default function CouponsPage() {
     setFormData({
       code: "",
       discountType: "percentage",
-      discountValue: 0,
-      minOrder: 0,
-      maxDiscount: 0,
+      discountValue: "",
+      minOrder: "",
+      maxDiscount: "",
       expiry: "",
-      usageLimit: 0
+      usageLimit: ""
     });
   };
 
@@ -210,7 +218,7 @@ export default function CouponsPage() {
                 <input
                   type="number"
                   value={formData.discountValue}
-                  onChange={(e) => setFormData({ ...formData, discountValue: Number(e.target.value) })}
+                  onChange={(e) => setFormData({ ...formData, discountValue: e.target.value === "" ? "" : Number(e.target.value) })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
                   min="0"
                   max={formData.discountType === "percentage" ? "100" : undefined}
@@ -223,7 +231,7 @@ export default function CouponsPage() {
                 <input
                   type="number"
                   value={formData.minOrder}
-                  onChange={(e) => setFormData({ ...formData, minOrder: Number(e.target.value) })}
+                  onChange={(e) => setFormData({ ...formData, minOrder: e.target.value === "" ? "" : Number(e.target.value) })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
                   min="0"
                 />
@@ -235,7 +243,7 @@ export default function CouponsPage() {
                   <input
                     type="number"
                     value={formData.maxDiscount}
-                    onChange={(e) => setFormData({ ...formData, maxDiscount: Number(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, maxDiscount: e.target.value === "" ? "" : Number(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
                     min="0"
                   />
@@ -259,7 +267,7 @@ export default function CouponsPage() {
                 <input
                   type="number"
                   value={formData.usageLimit}
-                  onChange={(e) => setFormData({ ...formData, usageLimit: Number(e.target.value) })}
+                  onChange={(e) => setFormData({ ...formData, usageLimit: e.target.value === "" ? "" : Number(e.target.value) })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
                   min="0"
                   placeholder="Leave empty for unlimited"
@@ -323,10 +331,10 @@ export default function CouponsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {coupon.discountValue}{coupon.discountType === "percentage" ? "%" : "₹"}
-                        {coupon.maxDiscount && coupon.discountType === "percentage" && (
+                        {coupon.discountType === "percentage" ? `${coupon.discountValue}%` : `₹${coupon.discountValue}`}
+                        {coupon.maxDiscount ? coupon.maxDiscount > 0 && coupon.discountType === "percentage" && (
                           <div className="text-xs text-gray-500">Max: ₹{coupon.maxDiscount}</div>
-                        )}
+                        ) : null}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

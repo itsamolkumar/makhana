@@ -4,6 +4,7 @@ export interface User {
   name: string;
   mobile?: string;
   role?: 'user' | 'admin';
+  profile_image?: string;
 }
 
 export interface Product {

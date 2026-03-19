@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { Product } from "@/types";
@@ -11,9 +11,10 @@ import toast from "react-hot-toast";
 import ReviewList from "@/components/reviews/ReviewList";
 
 export default function ProductDetailPage() {
-  const params = useParams();
+  const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
   const dispatch = useAppDispatch();
+
   const { user } = useAppSelector((state) => state.auth);
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -21,24 +22,24 @@ export default function ProductDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [showImageModal, setShowImageModal] = useState(false);
 
-  const slug = (params as any)?.slug;
-
+  // ================= FETCH PRODUCT =================
   useEffect(() => {
     if (!slug) return;
 
     const fetchProduct = async () => {
-      setLoading(true);
       try {
+        setLoading(true);
         const res = await getProductBySlug(slug);
-        if (res.data?.data?.product) {
-          setProduct(res.data.data.product);
-        } else {
+
+        const productData = res?.data?.data?.product;
+        if (!productData) {
           setError("Product not found");
+          return;
         }
-      } catch (err) {
-        console.error("Failed to fetch product", err);
+
+        setProduct(productData);
+      } catch {
         setError("Failed to load product");
       } finally {
         setLoading(false);
@@ -48,7 +49,7 @@ export default function ProductDetailPage() {
     fetchProduct();
   }, [slug]);
 
-  // Fetch related products
+  // ================= RELATED PRODUCTS =================
   useEffect(() => {
     if (!product) return;
 
@@ -56,45 +57,75 @@ export default function ProductDetailPage() {
 
     const fetchRelatedProducts = async () => {
       try {
-        const response = await fetch(`/api/products?category=${encodeURIComponent(product.category)}&limit=4`);
-        const data = await response.json();
-        const products = data.data?.products || [];
-        // Filter out current product
-        const filtered = products.filter((p: Product) => p._id !== product._id);
+        const res = await fetch(
+          `/api/products?category=${encodeURIComponent(
+            product.category
+          )}&limit=4`
+        );
+        const data = await res.json();
+
+        const filtered =
+          data?.data?.products?.filter(
+            (p: Product) => p._id !== product._id
+          ) || [];
+
         setRelatedProducts(filtered.slice(0, 3));
-      } catch (error) {
-        console.error("Failed to fetch related products", error);
-      }
+      } catch {}
     };
 
     fetchRelatedProducts();
   }, [product]);
 
-  const handleAddToCart = () => {
+  // ================= ACTIONS =================
+  const handleAddToCart = useCallback(() => {
     if (!product) return;
-    dispatch(addToCart({ product, quantity: 1 }));
-    toast.success("Added to cart");
-  };
 
+    if (!user) {
+      toast.error("Please login first!", {
+        duration: 3000,
+      });
+      return;
+    }
+
+    dispatch(addToCart({ product, quantity: 1 }));
+    toast.success("Added to cart!");
+  }, [product, user, dispatch]);
+
+  const handleBuyNow = useCallback(() => {
+    if (!product) return;
+
+    if (!user) {
+      toast.error("Login required!", {
+        duration: 3000,
+      });
+      router.push("/login?redirectTo=/checkout");
+      return;
+    }
+
+    dispatch(addToCart({ product, quantity: 1 }));
+    router.push("/checkout");
+  }, [product, user, dispatch, router]);
+
+  // ================= LOADING =================
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="h-12 w-12 rounded-full border-4 border-[var(--color-primary)] border-t-transparent animate-spin mx-auto" />
-          <p className="mt-4 text-gray-600">Loading product...</p>
-        </div>
+        <div className="h-12 w-12 rounded-full border-4 border-[var(--color-primary)] border-t-transparent animate-spin" />
       </div>
     );
   }
 
+  // ================= ERROR =================
   if (error || !product) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 text-center max-w-xl">
-          <h2 className="text-2xl font-semibold mb-4">{error || "Product not found"}</h2>
+        <div className="bg-white p-10 rounded-3xl shadow-sm border text-center">
+          <h2 className="text-xl font-semibold">
+            {error || "Product not found"}
+          </h2>
           <button
             onClick={() => router.push("/shop")}
-            className="mt-4 px-6 py-3 rounded-xl bg-[var(--color-primary)] text-white hover:opacity-90 transition"
+            className="mt-4 px-6 py-3 rounded-xl bg-[var(--color-primary)] text-white"
           >
             Back to Shop
           </button>
@@ -104,134 +135,123 @@ export default function ProductDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#faf9f6] py-12 px-4">
-      <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-10">
+    <div className="min-h-screen bg-[#faf9f6] py-10 px-4 overflow-x-hidden">
+
+      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10">
+
+        {/* LEFT */}
         <div className="space-y-6">
-          {/* Product Image Gallery */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden relative group">
-            <img
-              src={product.images?.[selectedImageIndex] || "/makhana-premium1.png"}
-              alt={product.name}
-              className="w-full h-96 object-cover transition-transform duration-300 group-hover:scale-105"
-            />
-            {/* Image overlay with zoom indicator */}
-            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-300 flex items-center justify-center">
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <div className="bg-white bg-opacity-90 rounded-full p-3">
-                  <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                  </svg>
-                </div>
-              </div>
+
+          {/* IMAGE */}
+          <div className="bg-white rounded-3xl shadow-sm border overflow-hidden">
+            <div className="w-full h-80 sm:h-96 flex items-center justify-center">
+
+              {product.images?.[selectedImageIndex] ? (
+                <img
+                  src={product.images[selectedImageIndex]}
+                  alt={product.name}
+                  className="max-w-full max-h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.src = "/fallback.png";
+                  }}
+                />
+              ) : (
+                <p className="text-gray-400">No Image</p>
+              )}
+
             </div>
-            <button
-              onClick={() => setShowImageModal(true)}
-              className="absolute bottom-4 right-4 bg-white bg-opacity-90 hover:bg-opacity-100 rounded-full p-3 shadow-lg transition-all duration-200"
-            >
-              <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-              </svg>
-            </button>
           </div>
 
-          {/* Thumbnail Gallery */}
-          <div className="grid grid-cols-4 gap-3">
+          {/* THUMBNAILS */}
+          <div className="grid grid-cols-4 gap-2 sm:gap-3">
             {product.images?.slice(0, 4).map((img, index) => (
               <div
                 key={img}
-                className={`bg-white rounded-2xl shadow-sm border-2 overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-md ${
-                  selectedImageIndex === index
-                    ? "border-[var(--color-primary)] ring-2 ring-[var(--color-primary)] ring-opacity-20"
-                    : "border-gray-200 hover:border-gray-300"
-                }`}
                 onClick={() => setSelectedImageIndex(index)}
+                className={`cursor-pointer border rounded-xl overflow-hidden ${
+                  selectedImageIndex === index
+                    ? "border-[var(--color-primary)]"
+                    : "border-gray-200"
+                }`}
               >
-                <img src={img} alt={product.name} className="w-full h-20 object-cover" />
+                <img
+                  src={img}
+                  className="w-full h-20 object-contain"
+                />
               </div>
             ))}
           </div>
-
-          {/* Product Highlights */}
-          <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-2xl p-6 border border-green-100">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              Why Choose This Product?
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center gap-2 text-sm text-gray-700">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                Premium Quality
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-700">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                Healthy & Natural
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-700">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                Rich in Nutrients
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-700">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                Long Shelf Life
-              </div>
-            </div>
-          </div>
         </div>
 
+        {/* RIGHT */}
         <div className="space-y-6">
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
-            <div className="flex justify-between items-start gap-4">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">{product.name}</h1>
-                <p className="text-sm text-gray-500 mt-2">{product.category}</p>
-              </div>
-              <div className="text-right">
-                <div className="text-3xl font-bold text-[var(--heading-color)]">
-                  ₹{product.discountPrice || product.price}
-                </div>
-                {product.discountPrice && (
-                  <div className="text-sm text-gray-500 line-through">₹{product.price}</div>
-                )}
-              </div>
+
+          <div className="bg-white rounded-3xl shadow-sm border p-6 sm:p-8">
+
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              {product.name}
+            </h1>
+
+            <p className="text-sm text-gray-500 mt-2">
+              {product.category}
+            </p>
+
+            <div className="mt-4 text-2xl sm:text-3xl font-bold text-[var(--heading-color)]">
+              ₹{product.discountPrice || product.price}
             </div>
 
-            <div className="mt-6 flex flex-wrap gap-3 items-center">
-              <span className="inline-flex items-center gap-2 bg-green-50 text-green-700 px-4 py-2 rounded-full text-sm">
-                {product.ratings ? product.ratings.toFixed(1) : "0.0"} ★
-              </span>
-              <span className="text-sm text-gray-500">{product.numReviews || 0} reviews</span>
-              <span className="text-sm text-gray-500">{product.inStock ? "In stock" : "Out of stock"}</span>
+            {/* PRODUCT INFO */}
+            <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-4">
+
+              <div className="bg-gray-50 border rounded-xl p-3 text-center">
+                <p className="text-xs text-gray-500">Weight</p>
+                <p className="font-semibold">{product.weight}</p>
+              </div>
+
+              <div className="bg-gray-50 border rounded-xl p-3 text-center">
+                <p className="text-xs text-gray-500">Stock</p>
+                <p className={product.inStock ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>
+                  {product.inStock ? "In Stock" : "Out of Stock"}
+                </p>
+              </div>
+
+              <div className="bg-gray-50 border rounded-xl p-3 text-center">
+                <p className="text-xs text-gray-500">Rating</p>
+                <p className="font-semibold">
+                  {product.ratings?.toFixed(1) || "0.0"} ★
+                </p>
+              </div>
+
             </div>
 
+            {/* DESCRIPTION */}
             <div
-              className="mt-6 text-gray-700 leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: product.description || "" }}
+              className="mt-6 text-gray-700"
+              dangerouslySetInnerHTML={{
+                __html: product.description || "",
+              }}
             />
 
+            {/* BUTTONS */}
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
+
               <button
                 onClick={handleAddToCart}
                 disabled={!product.inStock}
-                className="flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-[var(--color-primary)] text-white hover:opacity-90 transition disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-full font-semibold bg-[var(--color-primary)] text-white disabled:opacity-50"
               >
-                <ShoppingCart size={18} />
+                <ShoppingCart size={20} />
                 Add to Cart
               </button>
+
               <button
-                onClick={() => {
-                  if (user) {
-                    router.push("/checkout");
-                  } else {
-                    router.push("/login?redirectTo=/checkout");
-                  }
-                }}
+                onClick={handleBuyNow}
                 disabled={!product.inStock}
-                className="px-6 py-3 rounded-full border border-gray-200 text-gray-700 hover:bg-gray-50 transition"
+                className="flex-1 px-6 py-4 rounded-full font-semibold border-2 border-[var(--color-primary)] text-[var(--color-primary)] disabled:opacity-50"
               >
                 Buy Now
               </button>
+
             </div>
           </div>
 
@@ -239,89 +259,32 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
+      {/* RELATED */}
       {relatedProducts.length > 0 && (
-        <div className="mt-16">
-          <div className="max-w-6xl mx-auto">
-            <h2 className="text-2xl font-bold text-gray-900 mb-8 text-center">You Might Also Like</h2>
-            <div className="grid md:grid-cols-3 gap-6">
-              {relatedProducts.map((relatedProduct) => (
-                <div
-                  key={relatedProduct._id}
-                  className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => router.push(`/shop/${relatedProduct.slug}`)}
-                >
-                  <div className="aspect-square overflow-hidden">
-                    <img
-                      src={relatedProduct.images?.[0] || "/makhana-premium1.png"}
-                      alt={relatedProduct.name}
-                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-                  <div className="p-4">
-                    <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{relatedProduct.name}</h3>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        <span className="text-yellow-500">★</span>
-                        <span className="text-sm text-gray-600">
-                          {relatedProduct.ratings ? relatedProduct.ratings.toFixed(1) : "0.0"}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-[var(--heading-color)]">
-                          ₹{relatedProduct.discountPrice || relatedProduct.price}
-                        </div>
-                        {relatedProduct.discountPrice && (
-                          <div className="text-xs text-gray-500 line-through">
-                            ₹{relatedProduct.price}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+        <div className="mt-16 max-w-6xl mx-auto">
+          <h2 className="text-xl font-bold mb-6 text-center">
+            You Might Also Like
+          </h2>
 
-      {/* Image Modal */}
-      {showImageModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" onClick={() => setShowImageModal(false)}>
-          <div className="relative max-w-4xl max-h-full p-4" onClick={(e) => e.stopPropagation()}>
-            <img
-              src={product.images?.[selectedImageIndex] || "/makhana-premium1.png"}
-              alt={product.name}
-              className="max-w-full max-h-full object-contain"
-            />
-            {product.images && product.images.length > 1 && (
-              <>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedImageIndex((prev) => (prev > 0 ? prev - 1 : product.images!.length - 1));
-                  }}
-                  className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white bg-opacity-75 rounded-full p-2 hover:bg-opacity-100 transition"
-                >
-                  &lt;
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedImageIndex((prev) => (prev < product.images!.length - 1 ? prev + 1 : 0));
-                  }}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white bg-opacity-75 rounded-full p-2 hover:bg-opacity-100 transition"
-                >
-                  &gt;
-                </button>
-              </>
-            )}
-            <button
-              onClick={() => setShowImageModal(false)}
-              className="absolute top-2 right-2 bg-white bg-opacity-75 rounded-full p-2 hover:bg-opacity-100 transition"
-            >
-              ×
-            </button>
+          <div className="grid md:grid-cols-3 gap-6">
+            {relatedProducts.map((p) => (
+              <div
+                key={p._id}
+                onClick={() => router.push(`/shop/${p.slug}`)}
+                className="bg-white rounded-2xl shadow-sm border overflow-hidden cursor-pointer"
+              >
+                <img
+                  src={p.images?.[0]}
+                  className="w-full h-48 object-cover"
+                />
+                <div className="p-4">
+                  <p className="font-semibold">{p.name}</p>
+                  <p className="text-sm text-gray-500">
+                    ₹{p.discountPrice || p.price}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

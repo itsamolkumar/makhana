@@ -19,7 +19,13 @@ export async function GET(
 
     if (!product) return apiError("Product not found", 404);
 
-    return apiSuccess({ product });
+    // Add inStock field based on stock
+    const productWithInStock = {
+      ...product,
+      inStock: product.stock > 0
+    };
+
+    return apiSuccess({ product: productWithInStock });
 
   } catch (error) {
     return handleError(error);

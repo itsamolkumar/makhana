@@ -40,6 +40,7 @@ const authSlice = createSlice({
     logoutUser: (state) => {
       state.user = null;
       state.isAuthenticated = false;
+      // DO NOT reset isInitialized here, because the session state is known.
     },
     updateUser: (state, action: PayloadAction<Partial<User>>) => {
       if (state.user) {

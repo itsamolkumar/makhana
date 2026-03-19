@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
-    const { code } = body;
+    const { code, subtotal: frontendSubtotal } = body;
 
 
     const coupon = await Coupon.findOne({
@@ -56,37 +56,24 @@ export async function POST(req: NextRequest) {
     }
 
 
-    const cart = await Cart
-
-      .findOne({ user: user.userId })
-
-      .populate("items.product");
-
-
-    if (!cart || cart.items.length === 0) {
-
-      return apiError("Cart is empty");
-
+    let subtotal = 0;
+    if (frontendSubtotal !== undefined) {
+      subtotal = Number(frontendSubtotal);
+    } else {
+      const cart = await Cart.findOne({ user: user.userId }).populate("items.product");
+      if (cart && cart.items.length > 0) {
+        cart.items.forEach((item: any) => {
+          subtotal += item.product.price * item.quantity;
+        });
+      }
     }
 
-
-    let subtotal = 0;
-
-    cart.items.forEach((item: any) => {
-
-      subtotal += item.product.price * item.quantity;
-
-    });
-
+    if (subtotal === 0) {
+      return apiError("Cart is empty");
+    }
 
     if (subtotal < coupon.minOrder) {
-
-      return apiError(
-
-        `Minimum order ₹${coupon.minOrder} required`
-
-      );
-
+      return apiError(`Minimum order ₹${coupon.minOrder} required`);
     }
 
 
