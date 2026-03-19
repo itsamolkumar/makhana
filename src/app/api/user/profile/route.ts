@@ -5,50 +5,37 @@ import { authMiddleware } from "@/middleware/auth.middleware";
 import { apiSuccess, apiError } from "@/utils/apiResponse";
 import { handleError } from "@/utils/errorHandler";
 
-export async function GET(req: NextRequest) {
-  try {
-    await connectDB();
-
-    const user = await authMiddleware(req);
-    if (!user) return apiError("Unauthorized", 401);
-
-    const userDoc = await User.findById(user.userId).select("-password");
-    if (!userDoc) return apiError("User not found", 404);
-
-    return apiSuccess({ user: userDoc });
-  } catch (error) {
-    return handleError(error);
-  }
-}
-
 export async function PUT(req: NextRequest) {
   try {
     await connectDB();
 
-    const user = await authMiddleware(req);
+    const user: any = await authMiddleware(req);
     if (!user) return apiError("Unauthorized", 401);
 
-    const updateData = await req.json();
+    const body = await req.json();
+    const { name, email, mobile } = body;
 
-    // Only allow updating certain fields
-    const allowedFields = ["name", "mobile"];
-    const filteredData: any = {};
+    const updates: any = {};
+    if (name) updates.name = name;
+    if (email) updates.email = email;
+    if (mobile) updates.mobile = mobile;
 
-    for (const field of allowedFields) {
-      if (updateData[field] !== undefined) {
-        filteredData[field] = updateData[field];
+    if (!Object.keys(updates).length) {
+      return apiError("No updates provided", 400);
+    }
+
+    // Prevent email duplication
+    if (email) {
+      const existing = await User.findOne({ email: email.toLowerCase(), _id: { $ne: user.userId } });
+      if (existing) {
+        return apiError("Email already in use", 400);
       }
     }
 
-    const userDoc = await User.findByIdAndUpdate(
-      user.userId,
-      filteredData,
-      { new: true, select: "-password" }
-    );
+    const updatedUser = await User.findByIdAndUpdate(user.userId, updates, { new: true }).lean();
+    if (!updatedUser) return apiError("User not found", 404);
 
-    if (!userDoc) return apiError("User not found", 404);
-
-    return apiSuccess({ user: userDoc }, "Profile updated successfully");
+    return apiSuccess({ user: updatedUser }, "Profile updated successfully");
   } catch (error) {
     return handleError(error);
   }

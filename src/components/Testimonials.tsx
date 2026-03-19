@@ -3,39 +3,81 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Star, ChevronLeft, ChevronRight, Quote } from "lucide-react";
+import { getReviews } from "@/services/reviewService";
 
-const testimonials = [
+interface Testimonial {
+  id: string;
+  name: string;
+  role: string;
+  text: string;
+  rating: number;
+}
+
+const defaultTestimonials: Testimonial[] = [
   {
-    id: 1,
+    id: "1",
     name: "Sneha Shah",
     role: "Graphic Designer",
     text: "I'm hooked on the Cheesy Italiano makhana from Healthebites! It's crunchy, healthy, and bursting with flavor. What's better is that it's roasted, so I don't feel guilty munching on it during my work breaks.",
+    rating: 5
   },
   {
-    id: 2,
+    id: "2",
     name: "Rakesh Jain",
     role: "Marketing Executive",
     text: "Healthebites Pudina Punch is a refreshing twist to the usual snacks! I love how light and crunchy it is. I can indulge in this flavorful snack without any hesitation. A perfect blend of taste and health!",
+    rating: 5
   },
   {
-    id: 3,
+    id: "3",
     name: "Meenal Deshmukh",
     role: "Homemaker",
     text: "As someone who enjoys cheesy flavors, the Cheesy Italiano from Healthebites is my absolute favorite. It's so delicious, and I don't feel bad about snacking since it's roasted.",
+    rating: 5
   },
   {
-    id: 4,
+    id: "4",
     name: "Neha Patel",
     role: "Fitness Enthusiast",
     text: "I have been snacking on Healthebites Spicy Indiana flavor for a while now, and it's simply addictive! The fact that it's roasted and not fried makes it a healthy option for movie nights!",
+    rating: 5
   },
 ];
 
 export default function Testimonials() {
+  const [testimonials, setTestimonials] = useState<Testimonial[]>(defaultTestimonials);
   const [current, setCurrent] = useState(0);
   const [direction, setDirection] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const autoPlayRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const fetchTopReview = async () => {
+      try {
+        const response = await fetch('/api/reviews/top');
+        const data = await response.json();
+        const topReview = data.data?.review;
+
+        if (topReview && topReview.likes > 0) {
+          const reviewTestimonial = {
+            id: topReview._id,
+            name: topReview.user?.name || "Anonymous",
+            role: "Customer",
+            text: topReview.comment || "Great product!",
+            rating: topReview.rating
+          };
+          setTestimonials([reviewTestimonial, ...defaultTestimonials.slice(0, 3)]);
+        } else {
+          setTestimonials(defaultTestimonials);
+        }
+      } catch (error) {
+        console.error("Error fetching top review", error);
+        setTestimonials(defaultTestimonials);
+      }
+    };
+
+    fetchTopReview();
+  }, []);
 
   // --- Logic: Slide Transitions ---
   const paginate = useCallback((newDirection: number) => {

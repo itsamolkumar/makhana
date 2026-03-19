@@ -2,11 +2,11 @@
 
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
 import { removeFromCart, updateQuantity, clearCart } from "@/redux/slices/cartSlice";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 
 export default function CartPage() {
   const { items, subtotal, discount, total } = useAppSelector((state) => state.cart);
@@ -138,12 +138,12 @@ export default function CartPage() {
               </div>
             </div>
 
-            <button 
+            <button
               onClick={() => {
                 if (isAuthenticated) {
-                  router.push('/checkout');
+                  router.push("/checkout");
                 } else {
-                  router.push(`/login?redirectTo=${encodeURIComponent('/checkout')}`);
+                  router.push("/login?redirectTo=/checkout");
                 }
               }}
               className="w-full bg-[var(--color-primary)] text-white py-3 rounded-full font-medium hover:opacity-90 transition mb-4"

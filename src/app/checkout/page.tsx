@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
 import { clearCart } from "@/redux/slices/cartSlice";
+import { updateUser } from "@/redux/slices/authSlice";
 import { motion } from "framer-motion";
 import { MapPin, Plus, Edit2, Trash2, CreditCard, Truck, CheckCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -26,10 +27,10 @@ export default function CheckoutPage() {
   const dispatch = useAppDispatch();
   const router = useRouter();
 
-  const [addresses, setAddresses] = useState<Address[]>([]);
-  const [selectedAddress, setSelectedAddress] = useState<string>("");
-  const [showAddressForm, setShowAddressForm] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [couponDiscount, setCouponDiscount] = useState(0);
+  const [finalTotal, setFinalTotal] = useState(total);
 
   // Address form state
   const [addressForm, setAddressForm] = useState<Address>({
@@ -49,6 +50,11 @@ export default function CheckoutPage() {
     mobile: user?.mobile || "",
   });
 
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState<string>("");
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   useEffect(() => {
     if (!isAuthenticated) {
       router.push("/login?redirectTo=/checkout");
@@ -64,16 +70,24 @@ export default function CheckoutPage() {
     fetchUserAddresses();
   }, [isAuthenticated, items.length, router]);
 
+  useEffect(() => {
+    if (!appliedCoupon) {
+      setFinalTotal(total);
+    }
+  }, [total, appliedCoupon]);
+
   const fetchUserAddresses = async () => {
     try {
       const res = await fetch("/api/user/addresses");
       if (res.ok) {
         const data = await res.json();
         setAddresses(data.addresses || []);
-        // Set default address if available
+        // Set default address if available, otherwise select the first one
         const defaultAddr = data.addresses?.find((addr: Address) => addr.isDefault);
         if (defaultAddr) {
           setSelectedAddress(data.addresses.indexOf(defaultAddr).toString());
+        } else if (data.addresses?.length) {
+          setSelectedAddress("0");
         }
       }
     } catch (error) {
@@ -169,6 +183,11 @@ export default function CheckoutPage() {
   };
 
   const handleUpdateUserDetails = async () => {
+    if (!userDetails.name || !userDetails.email) {
+      toast.error("Please provide name and email");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch("/api/user/profile", {
@@ -176,17 +195,56 @@ export default function CheckoutPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(userDetails),
       });
-
+      const data = await res.json();
       if (res.ok) {
         toast.success("Details updated successfully");
+        dispatch(updateUser(userDetails));
       } else {
-        toast.error("Failed to update details");
+        toast.error(data.message || "Failed to update details");
       }
-    } catch (error) {
-      toast.error("Failed to update details");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to update details");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) {
+      toast.error("Please enter a coupon code");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/coupons/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: couponCode.trim() }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setAppliedCoupon(data.data);
+        setCouponDiscount(data.data.discount);
+        setFinalTotal(data.data.finalPrice);
+        toast.success("Coupon applied successfully!");
+      } else {
+        toast.error(data.message || "Invalid coupon code");
+      }
+    } catch (error) {
+      toast.error("Failed to apply coupon");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponDiscount(0);
+    setCouponCode("");
+    setFinalTotal(total);
+    toast.success("Coupon removed");
   };
 
   const handlePlaceOrder = async () => {
@@ -197,12 +255,10 @@ export default function CheckoutPage() {
 
     setLoading(true);
     try {
+      const shippingAddress = addresses[Number(selectedAddress)];
       const orderData = {
-        items,
-        addressId: selectedAddress,
-        subtotal,
-        discount,
-        total,
+        shippingAddress,
+        couponCode: appliedCoupon?.coupon,
         userDetails,
       };
 
@@ -468,6 +524,42 @@ export default function CheckoutPage() {
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 h-fit">
             <h2 className="text-xl font-bold text-gray-900 mb-6">Order Summary</h2>
 
+            {/* Coupon Section */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-xl">
+              <h3 className="font-medium text-gray-900 mb-3">Have a coupon?</h3>
+              {appliedCoupon ? (
+                <div className="flex items-center justify-between bg-green-50 p-3 rounded-lg">
+                  <div>
+                    <p className="font-medium text-green-800">{appliedCoupon.coupon}</p>
+                    <p className="text-sm text-green-600">₹{couponDiscount} discount applied</p>
+                  </div>
+                  <button
+                    onClick={handleRemoveCoupon}
+                    className="text-red-500 hover:text-red-700 text-sm font-medium"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="Enter coupon code"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+                  />
+                  <button
+                    onClick={handleApplyCoupon}
+                    disabled={loading || !couponCode.trim()}
+                    className="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+                  >
+                    Apply
+                  </button>
+                </div>
+              )}
+            </div>
+
             <div className="space-y-3 mb-6">
               <div className="flex justify-between">
                 <span className="text-gray-600">Subtotal</span>
@@ -476,8 +568,15 @@ export default function CheckoutPage() {
 
               {discount > 0 && (
                 <div className="flex justify-between text-green-600">
-                  <span>Discount</span>
+                  <span>Cart Discount</span>
                   <span>-₹{discount}</span>
+                </div>
+              )}
+
+              {couponDiscount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Coupon Discount</span>
+                  <span>-₹{couponDiscount}</span>
                 </div>
               )}
 
@@ -488,7 +587,7 @@ export default function CheckoutPage() {
 
               <div className="flex justify-between text-lg font-bold pt-3 border-t">
                 <span>Total</span>
-                <span>₹{total}</span>
+                <span>₹{finalTotal}</span>
               </div>
             </div>
 

@@ -37,6 +37,10 @@ export interface IOrder {
 
   shippingPrice?: number;
 
+  couponCode?: string;
+
+  couponDiscount?: number;
+
   deliveredAt?: Date;
 }
 
@@ -114,6 +118,15 @@ const orderSchema = new Schema<IOrder>(
     },
 
     shippingPrice: {
+      type: Number,
+      default: 0
+    },
+
+    couponCode: {
+      type: String
+    },
+
+    couponDiscount: {
       type: Number,
       default: 0
     },

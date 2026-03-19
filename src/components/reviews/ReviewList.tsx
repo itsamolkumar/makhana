@@ -23,7 +23,7 @@ export default function ReviewList({ productId, allowCreate = true, orderId, onR
 
   const userReview = useMemo(() => {
     if (!user) return null;
-    return reviews.find((r) => r.user?._id === user.id || r.user?._id === user.id || r.user?.name === user.name);
+    return reviews.find((r) => r.user?._id === user.id);
   }, [reviews, user]);
 
   const fetch = async () => {
@@ -78,6 +78,10 @@ export default function ReviewList({ productId, allowCreate = true, orderId, onR
           >
             {userReview ? "Edit Your Review" : "Write a Review"}
           </button>
+        ) : !user ? (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-center">
+            <p className="text-blue-700">Please login to add valuable comment</p>
+          </div>
         ) : null}
       </div>
 
@@ -123,7 +127,7 @@ export default function ReviewList({ productId, allowCreate = true, orderId, onR
                   </div>
                 </div>
 
-                {user && (review.user?._id === user.id || review.user?.name === user.name) ? (
+                {user && review.user?._id === user.id ? (
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
