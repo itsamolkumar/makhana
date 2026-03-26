@@ -1,14 +1,7 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { AnimatePresence } from "framer-motion";
-import Navbar from "@/components/Navbar";
-import Loader from "@/components/Loader";
 import type { Metadata } from "next";
 import { Playfair_Display, DM_Sans } from "next/font/google";
 import "@/app/globals.css";
-import Footer from "@/components/Footer";
-import Providers from "./providers";
+import ClientLayout from "./ClientLayout";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -20,48 +13,23 @@ const dmSans = DM_Sans({
   variable: "--font-dmSans",
 });
 
-// export const metadata: Metadata = {
-//   title: "Healthe Bites | Premium Makhana",
-//   description: "Premium makhana sourced directly from Bihar.",
-// };
+export const metadata: Metadata = {
+  title: "Healthe Bites | Premium Makhana",
+  description: "Premium makhana sourced directly from Bihar.",
+  icons: {
+    icon: "/favicon.svg",
+  },
+};
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-    const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 2500);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-
   return (
     <html lang="en">
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
-      </head>
-      <body>
-
-        <AnimatePresence>
-          {loading && <Loader />}
-        </AnimatePresence>
-
-        {!loading && (
-          <><Providers>
-            <Navbar />
-            {children}
-            <Footer/>
-          </Providers>
-
-          </>
-        )}
-
+      <body className={`${playfair.variable} ${dmSans.variable}`}>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );
