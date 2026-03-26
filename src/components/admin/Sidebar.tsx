@@ -7,21 +7,25 @@ import {
   Package,
   TicketPercent,
   ShoppingCart,
+  Settings,
+  Users,
 } from "lucide-react";
 
 const menu = [
   { name: "Dashboard", icon: LayoutDashboard, href: "/admin" },
+  { name: "Users", icon: Users, href: "/admin/users" },
   { name: "Products", icon: Package, href: "/admin/products" },
   { name: "Coupons", icon: TicketPercent, href: "/admin/coupons" },
   { name: "Orders", icon: ShoppingCart, href: "/admin/orders" },
+  { name: "Customize Site", icon: Settings, href: "/admin/customize" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ className = "" }: { className?: string }) {
   return (
     <motion.aside
       initial={{ x: -60, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
-      className="hidden md:flex flex-col w-64 h-screen bg-white border-r border-neutral-200 shadow-sm p-5"
+      className={`flex flex-col h-screen bg-white border-r border-neutral-200 shadow-sm p-5 ${className}`}
     >
       <h2 className="text-xl font-semibold mb-8 text-[var(--color-primary)]">
         Admin Panel

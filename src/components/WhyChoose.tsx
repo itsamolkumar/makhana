@@ -84,7 +84,7 @@ export default function WhyChoose() {
   }, []);
 
   return (
-    <section className="py-20 px-6">
+    <section className="py-12 md:py-16 px-6">
       <div className="max-w-6xl mx-auto text-center">
 
         <FadeUp>

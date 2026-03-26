@@ -1,9 +1,32 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Instagram, Facebook, Twitter } from "lucide-react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 export default function Footer() {
+  const [socialLinks, setSocialLinks] = useState({
+    instagram: "",
+    facebook: "",
+    twitter: "",
+  });
+
+  useEffect(() => {
+    async function fetchConfig() {
+      try {
+        const res = await fetch("/api/customization", { cache: "no-store" });
+        const { data } = await res.json();
+        if (data && data.socialLinks) {
+          setSocialLinks(data.socialLinks);
+        }
+      } catch (err) {
+        console.error("Failed to fetch custom social links");
+      }
+    }
+    fetchConfig();
+  }, []);
+
   return (
     <footer className="bg-[var(--color-bg)] border-t border-neutral-200 py-16 px-6">
 
@@ -38,10 +61,10 @@ export default function Footer() {
           <h4 className="text-lg font-medium text-[var(--heading-color)] mb-4">
             Quick Links
           </h4>
-          <ul className="space-y-3 text-[var(--color-muted)] text-sm">
-            <li className="hover:text-[var(--color-primary)] transition">Shop</li>
-            <li className="hover:text-[var(--color-primary)] transition">About</li>
-            <li className="hover:text-[var(--color-primary)] transition">Contact</li>
+          <ul className="space-y-3 text-[var(--color-muted)] text-sm flex flex-col">
+            <Link href="/shop" className="hover:text-[var(--color-primary)] transition">Shop</Link>
+            <Link href="/about" className="hover:text-[var(--color-primary)] transition">About</Link>
+            <Link href="/contact" className="hover:text-[var(--color-primary)] transition">Contact</Link>
           </ul>
         </motion.div>
 
@@ -57,9 +80,29 @@ export default function Footer() {
           </h4>
 
           <div className="flex gap-5">
-            <Instagram className="text-[var(--color-muted)] hover:text-[var(--color-primary)] transition cursor-pointer" />
-            <Facebook className="text-[var(--color-muted)] hover:text-[var(--color-primary)] transition cursor-pointer" />
-            <Twitter className="text-[var(--color-muted)] hover:text-[var(--color-primary)] transition cursor-pointer" />
+            {socialLinks.instagram ? (
+              <a href={socialLinks.instagram} target="_blank" rel="noreferrer">
+                <Instagram className="text-[var(--color-muted)] hover:text-[var(--color-primary)] transition cursor-pointer" />
+              </a>
+            ) : (
+              <Instagram className="text-[var(--color-muted)] hover:text-[var(--color-primary)] transition cursor-pointer" />
+            )}
+
+            {socialLinks.facebook ? (
+              <a href={socialLinks.facebook} target="_blank" rel="noreferrer">
+                <Facebook className="text-[var(--color-muted)] hover:text-[var(--color-primary)] transition cursor-pointer" />
+              </a>
+            ) : (
+              <Facebook className="text-[var(--color-muted)] hover:text-[var(--color-primary)] transition cursor-pointer" />
+            )}
+
+            {socialLinks.twitter ? (
+              <a href={socialLinks.twitter} target="_blank" rel="noreferrer">
+                <Twitter className="text-[var(--color-muted)] hover:text-[var(--color-primary)] transition cursor-pointer" />
+              </a>
+            ) : (
+              <Twitter className="text-[var(--color-muted)] hover:text-[var(--color-primary)] transition cursor-pointer" />
+            )}
           </div>
         </motion.div>
 

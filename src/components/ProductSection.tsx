@@ -32,7 +32,7 @@ export default function ProductSection() {
 
   if (loading) {
     return (
-      <section className="py-28 px-6 bg-[var(--color-bg)]">
+      <section className="py-16 md:py-20 px-6 bg-[var(--color-bg)]">
         <div className="max-w-6xl mx-auto">
           <FadeUp>
             <div className="text-center mb-20">
@@ -55,7 +55,7 @@ export default function ProductSection() {
   }
 
   return (
-    <section className="py-28 px-6 bg-[var(--color-bg)]">
+    <section className="py-16 md:py-20 px-6 bg-[var(--color-bg)]">
       <div className="max-w-6xl mx-auto">
 
         <FadeUp>

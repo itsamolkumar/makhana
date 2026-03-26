@@ -35,3 +35,17 @@ body {
 html, body {
   overflow-x: hidden;
 }
+/* Product page ka unwanted blank circle hide */
+.prose .flex.items-center.rounded-full.border-gray-200,
+.prose .mt-8.flex.flex-col {
+  display: none !important;
+}
+/* kisi bhi unwanted round element ko hide */
+.bg-white.rounded-3xl * {
+  outline: none !important;
+}
+
+.bg-white.rounded-3xl input[type="radio"],
+.bg-white.rounded-3xl input[type="checkbox"] {
+  display: none !important;
+}

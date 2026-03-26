@@ -32,10 +32,10 @@ export default function ProductCard({ product }: ProductCardProps) {
     >
       <Link href={`/shop/${product.slug}`} className="flex flex-col h-full relative cursor-pointer">
         {/* IMAGE AREA (Dominant) */}
-        <div className="relative bg-[#F7F2EA] h-72 flex items-center justify-center">
+        <div className="relative bg-[#F7F2EA] h-72 flex items-center justify-center overflow-hidden">
 
           {hasDiscount && (
-            <div className="absolute top-6 left-6 bg-[var(--color-primary)] text-white text-xs px-4 py-1 rounded-full shadow">
+            <div className="absolute top-4 left-4 bg-[var(--color-primary)] text-white text-[11px] font-bold tracking-widest px-3 py-1.5 rounded-full shadow-lg z-20">
               SALE
             </div>
           )}
@@ -45,7 +45,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             alt={product.name}
             whileHover={{ scale: 1.07 }}
             transition={{ duration: 0.4 }}
-            className="w-[85%] h-auto object-contain drop-shadow-[0_30px_40px_rgba(0,0,0,0.15)]"
+            className="w-full h-56 object-contain p-4 drop-shadow-[0_20px_25px_rgba(0,0,0,0.15)] z-0"
           />
 
           {/* Subtle Gradient Depth */}

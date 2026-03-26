@@ -5,6 +5,7 @@ import { handleError } from "@/utils/errorHandler";
 import { authMiddleware } from "@/middleware/auth.middleware";
 import { connectDB } from "@/lib/db";
 import OrderModel from "@/models/order.model";
+import { sendAdminOrderEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
     await connectDB();
 
     // Verify ownership
-    const order = await OrderModel.findById(dbOrderId);
+    const order = await OrderModel.findById(dbOrderId).populate("orderItems.product", "name");
     if (!order) {
       return apiError("Order not found", 404);
     }
@@ -52,6 +53,11 @@ export async function POST(req: NextRequest) {
     order.paymentStatus = "paid";
     order.paymentId = razorpay_payment_id;
     await order.save();
+
+    // Send Admin Notification Email asynchronously without blocking response
+    if (process.env.EMAIL_USER) {
+      sendAdminOrderEmail(order, process.env.EMAIL_USER).catch(err => console.error("Admin Email Error:", err));
+    }
 
     return apiSuccess({ 
       order, 

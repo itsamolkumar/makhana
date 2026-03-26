@@ -17,7 +17,9 @@ export async function GET(req: NextRequest) {
     const decoded: any = await authMiddleware(req);
     console.log("AuthMiddleware result:", decoded);
 
-    if (!decoded) return;
+    if (!decoded) {
+      return apiSuccess({ user: null }, "Not authenticated");
+    }
 
     const user = await User.findById(decoded.userId).select("-password");
     console.log("Database User found:", user);

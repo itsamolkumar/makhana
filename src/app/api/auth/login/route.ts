@@ -30,9 +30,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (!user.isVerified) {
-
       return apiError("Email not verified", 403);
-
+    }
+    
+    if (user.isBlocked) {
+      return apiError("Your account has been blocked. Please contact support.", 403);
     }
 
     const isMatch = await bcrypt.compare(password, user.password);

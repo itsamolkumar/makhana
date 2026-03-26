@@ -6,7 +6,6 @@ import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { Product } from "@/types";
 import { getProductBySlug } from "@/services/productService";
 import { addToCart } from "@/redux/slices/cartSlice";
-import { ShoppingCart } from "lucide-react";
 import toast from "react-hot-toast";
 import ReviewList from "@/components/reviews/ReviewList";
 
@@ -24,30 +23,29 @@ export default function ProductDetailPage() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   // ================= FETCH PRODUCT =================
-  useEffect(() => {
+  const fetchProduct = useCallback(async () => {
     if (!slug) return;
+    try {
+      setLoading(true);
+      const res = await getProductBySlug(slug as string);
 
-    const fetchProduct = async () => {
-      try {
-        setLoading(true);
-        const res = await getProductBySlug(slug);
-
-        const productData = res?.data?.data?.product;
-        if (!productData) {
-          setError("Product not found");
-          return;
-        }
-
-        setProduct(productData);
-      } catch {
-        setError("Failed to load product");
-      } finally {
-        setLoading(false);
+      const productData = res?.data?.data?.product;
+      if (!productData) {
+        setError("Product not found");
+        return;
       }
-    };
 
-    fetchProduct();
+      setProduct(productData);
+    } catch {
+      setError("Failed to load product");
+    } finally {
+      setLoading(false);
+    }
   }, [slug]);
+
+  useEffect(() => {
+    fetchProduct();
+  }, [fetchProduct]);
 
   // ================= RELATED PRODUCTS =================
   useEffect(() => {
@@ -144,7 +142,7 @@ export default function ProductDetailPage() {
 
           {/* IMAGE */}
           <div className="bg-white rounded-3xl shadow-sm border overflow-hidden">
-            <div className="w-full h-80 sm:h-96 flex items-center justify-center">
+            <div className="w-full h-80 sm:h-96 flex items-center justify-center p-4">
 
               {product.images?.[selectedImageIndex] ? (
                 <img
@@ -188,11 +186,11 @@ export default function ProductDetailPage() {
 
           <div className="bg-white rounded-3xl shadow-sm border p-6 sm:p-8">
 
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 leading-tight">
               {product.name}
             </h1>
 
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-sm text-gray-500 mt-2 font-medium">
               {product.category}
             </p>
 
@@ -201,36 +199,38 @@ export default function ProductDetailPage() {
             </div>
 
             {/* PRODUCT INFO */}
-            <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="mt-6 grid grid-cols-3 gap-2 sm:gap-4">
 
               <div className="bg-gray-50 border rounded-xl p-3 text-center">
-                <p className="text-xs text-gray-500">Weight</p>
-                <p className="font-semibold">{product.weight}</p>
+                <p className="text-xs text-gray-500 mb-0.5">Weight</p>
+                <p className="text-sm sm:text-base font-semibold">{product.weight}</p>
               </div>
 
               <div className="bg-gray-50 border rounded-xl p-3 text-center">
-                <p className="text-xs text-gray-500">Stock</p>
-                <p className={product.inStock ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>
-                  {product.inStock ? "In Stock" : "Out of Stock"}
+                <p className="text-xs text-gray-500 mb-0.5">Stock</p>
+                <p className={`text-sm sm:text-base font-semibold ${product.inStock ? 'text-green-600' : 'text-red-500'}`}>
+                  {product.inStock ? "In Stock" : "Sold Out"}
                 </p>
               </div>
 
               <div className="bg-gray-50 border rounded-xl p-3 text-center">
-                <p className="text-xs text-gray-500">Rating</p>
-                <p className="font-semibold">
-                  {product.ratings?.toFixed(1) || "0.0"} ★
+                <p className="text-xs text-gray-500 mb-0.5">Rating</p>
+                <p className="text-sm sm:text-base font-semibold flex items-center justify-center gap-1">
+                  {product.ratings?.toFixed(1) || "0.0"} <span className="text-yellow-500">★</span>
                 </p>
               </div>
 
             </div>
 
             {/* DESCRIPTION */}
-            <div
-              className="mt-6 text-gray-700"
-              dangerouslySetInnerHTML={{
-                __html: product.description || "",
-              }}
-            />
+            {product.description && product.description.replace(/<[^>]*>?/gm, '').trim() !== "" && (
+              <div
+                className="mt-6 text-gray-700 leading-relaxed text-sm sm:text-base prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{
+                  __html: product.description,
+                }}
+              />
+            )}
 
             {/* BUTTONS */}
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
@@ -238,16 +238,15 @@ export default function ProductDetailPage() {
               <button
                 onClick={handleAddToCart}
                 disabled={!product.inStock}
-                className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-full font-semibold bg-[var(--color-primary)] text-white disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-full font-semibold bg-[var(--color-primary)] text-white hover:bg-[#1a402d] transition disabled:opacity-50"
               >
-                <ShoppingCart size={20} />
                 Add to Cart
               </button>
 
               <button
                 onClick={handleBuyNow}
                 disabled={!product.inStock}
-                className="flex-1 px-6 py-4 rounded-full font-semibold border-2 border-[var(--color-primary)] text-[var(--color-primary)] disabled:opacity-50"
+                className="flex-1 px-6 py-4 rounded-full font-semibold border-2 border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-white transition disabled:opacity-50"
               >
                 Buy Now
               </button>
@@ -255,7 +254,11 @@ export default function ProductDetailPage() {
             </div>
           </div>
 
-          <ReviewList productId={product._id} allowCreate={!!user} />
+          <ReviewList 
+            productId={product._id} 
+            allowCreate={!!user} 
+            onReviewAdded={fetchProduct}
+          />
         </div>
       </div>
 

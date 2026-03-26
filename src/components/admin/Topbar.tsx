@@ -1,7 +1,8 @@
 "use client";
 
-import { Menu, Bell, User } from "lucide-react";
+import { Menu, User } from "lucide-react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 export default function Topbar({ setOpen }: any) {
   return (
@@ -20,8 +21,9 @@ export default function Topbar({ setOpen }: any) {
       <h1 className="font-semibold text-lg">Dashboard</h1>
 
       <div className="flex items-center gap-4">
-        <Bell size={20} />
-        <User size={22} className="bg-neutral-100 p-1 rounded-full" />
+        <Link href="/profile/settings" title="Profile Settings">
+          <User size={22} className="bg-neutral-100 p-1 rounded-full cursor-pointer hover:bg-neutral-200 transition" />
+        </Link>
       </div>
     </motion.header>
   );

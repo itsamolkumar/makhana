@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 
 export default function CTA() {
   return (
-    <section className="relative py-32 px-6 bg-[var(--color-bg)] overflow-hidden">
+    <section className="relative py-20 md:py-24 px-6 bg-[var(--color-bg)] overflow-hidden">
 
       {/* Subtle radial glow */}
       <div className="absolute inset-0 flex justify-center pointer-events-none">

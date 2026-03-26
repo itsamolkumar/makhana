@@ -44,19 +44,37 @@ export default function AdminLayout({ children }: any) {
     <div className="flex bg-neutral-50 min-h-screen">
 
       {/* Desktop Sidebar */}
-      <Sidebar />
+      <Sidebar className="hidden md:flex w-64 z-10" />
 
       {/* Mobile Sidebar */}
       <AnimatePresence>
         {open && (
-          <motion.div
-            initial={{ x: -260 }}
-            animate={{ x: 0 }}
-            exit={{ x: -260 }}
-            className="fixed top-0 left-0 w-64 h-screen bg-white z-50 shadow-lg md:hidden"
-          >
-            <Sidebar />
-          </motion.div>
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setOpen(false)}
+              className="fixed inset-0 bg-black z-40 md:hidden"
+            />
+            {/* Sidebar */}
+            <motion.div
+              initial={{ x: -260 }}
+              animate={{ x: 0 }}
+              exit={{ x: -260 }}
+              transition={{ ease: "circOut", duration: 0.3 }}
+              className="fixed top-0 left-0 w-64 h-screen bg-white z-50 shadow-2xl md:hidden overflow-y-auto"
+            >
+              <button 
+                onClick={() => setOpen(false)}
+                className="absolute top-6 right-4 p-1.5 bg-neutral-100 text-neutral-600 rounded-full hover:bg-neutral-200 transition"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+              <Sidebar className="w-full border-none shadow-none pt-4" />
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 

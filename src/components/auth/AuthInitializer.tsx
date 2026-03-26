@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { useAppDispatch } from "@/redux/hooks";
 import { loginSuccess, logoutUser, setInitialized } from "@/redux/slices/authSlice";
 import { getCurrentUser } from "@/services/authService";
@@ -8,9 +9,17 @@ import { getCurrentUser } from "@/services/authService";
 export default function AuthInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useAppDispatch();
   const initRef = useRef(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     if (initRef.current) return;
+    
+    // Prevent fetching auth status on the blocked page to avoid infinite redirect loops
+    if (pathname === "/blocked") {
+      dispatch(setInitialized());
+      return;
+    }
+    
     initRef.current = true;
 
     const initAuth = async () => {
@@ -30,9 +39,15 @@ export default function AuthInitializer({ children }: { children: React.ReactNod
           console.log("AuthInitializer: No user found in response, logging out");
           dispatch(logoutUser());
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("AuthInitializer: Error fetching user:", error);
-        dispatch(logoutUser());
+        
+        // Handle blocked user detection
+        if (error.response?.data?.message === "BLOCKED_USER") {
+          window.location.href = "/blocked";
+        } else {
+          dispatch(logoutUser());
+        }
       } finally {
         dispatch(setInitialized());
       }

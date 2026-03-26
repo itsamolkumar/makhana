@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShoppingBag } from "lucide-react";
+import Link from "next/link";
 
-const slides = [
+const defaultSlides = [
   { type: "video", src: "/intro.mp4" },
   { type: "image", src: "/Hero2.jpeg" },
   { type: "image", src: "/Hero3.png" },
@@ -14,10 +15,26 @@ const slides = [
 
 export default function Hero() {
   const [current, setCurrent] = useState(0);
+  const [slides, setSlides] = useState(defaultSlides);
+
+  useEffect(() => {
+    async function fetchConfig() {
+      try {
+        const res = await fetch("/api/customization", { cache: "no-store" });
+        const { data } = await res.json();
+        if (data && data.heroSlides && data.heroSlides.length > 0) {
+          setSlides(data.heroSlides);
+        }
+      } catch (err) {
+        console.error("Failed to fetch custom hero slides");
+      }
+    }
+    fetchConfig();
+  }, []);
 
   // Auto-slide (images only)
   useEffect(() => {
-    if (current === 0) return;
+    if (current === 0 || slides.length <= 1) return;
 
     const timer = setTimeout(() => {
       setCurrent((prev) =>
@@ -26,7 +43,7 @@ export default function Hero() {
     }, 5000);
 
     return () => clearTimeout(timer);
-  }, [current]);
+  }, [current, slides.length]);
 
   // Swipe support
   const handleDragEnd = (_: any, info: any) => {
@@ -124,6 +141,7 @@ export default function Hero() {
             </motion.p>
 
             {/* Button */}
+            <Link href="/shop">
             <motion.button
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
@@ -137,6 +155,7 @@ export default function Hero() {
               <ShoppingBag size={16} />
               Shop Now
             </motion.button>
+            </Link>
 
           </div>
 

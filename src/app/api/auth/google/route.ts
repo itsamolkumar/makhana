@@ -47,6 +47,10 @@ export async function POST(req: NextRequest) {
         role: "user",
       });
     } else {
+      if (user.isBlocked) {
+        return apiError("Your account has been blocked. Please contact support.", 403);
+      }
+      
       // If user exists but is somehow not verified, mark them verified now
       if (!user.isVerified) {
         user.isVerified = true;

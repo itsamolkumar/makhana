@@ -28,7 +28,7 @@ export default function FAQ() {
   const [open, setOpen] = useState<number | null>(null);
 
   return (
-    <section className="py-24 px-6 md:px-12 bg-[#FDFBF7]">
+    <section className="py-16 md:py-20 px-6 md:px-12 bg-[#FDFBF7]">
       {/* Max-width ko 3xl se badhakar 5xl (1024px) kar diya hai */}
       <div className="max-w-5xl mx-auto">
         

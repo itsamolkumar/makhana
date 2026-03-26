@@ -15,6 +15,7 @@ export interface IUser {
 
   image?: string;
   isVerified: boolean;
+  isBlocked?: boolean;
   tokenVersion: number;
   addresses?: {
     fullName: string;
@@ -70,6 +71,10 @@ const userSchema = new Schema<IUser>(
       type: Boolean,
       default: false
     },
+    isBlocked: {
+      type: Boolean,
+      default: false
+    },
     tokenVersion: {
       type: Number,
       default: 0
@@ -115,6 +120,11 @@ const userSchema = new Schema<IUser>(
 
 userSchema.index({ location: "2dsphere" });
 
-const User = models.User || model("User", userSchema);
+// Prevent Mongoose from caching the old schema in Next.js development mode
+if (mongoose.models.User) {
+  delete mongoose.models.User;
+}
+
+const User = model("User", userSchema);
 
 export default User;

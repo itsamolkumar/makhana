@@ -4,6 +4,7 @@ import { authMiddleware } from "@/middleware/auth.middleware";
 import { adminMiddleware } from "@/middleware/admin.middleware";
 import { apiSuccess, apiError } from "@/utils/apiResponse";
 import { handleError } from "@/utils/errorHandler";
+import { sendAdminOrderEmail } from "@/lib/email";
 import {
   createOrder,
   getUserOrders,
@@ -124,6 +125,14 @@ export async function POST(req: NextRequest) {
 
     // ✅ TODO: Emit order creation event for notifications
     // eventEmitter.emit('order.created', orderResult.order);
+
+    if (orderData.paymentMethod === "cod" && process.env.EMAIL_USER) {
+      const OrderModel = require("@/models/order.model").default;
+      const populatedOrder = await OrderModel.findById(orderResult.order._id).populate("orderItems.product", "name");
+      if (populatedOrder) {
+        sendAdminOrderEmail(populatedOrder, process.env.EMAIL_USER).catch((err: any) => console.error("Admin Email Error:", err));
+      }
+    }
 
     return apiSuccess(
       { order: orderResult.order },

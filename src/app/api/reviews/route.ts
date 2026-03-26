@@ -1,9 +1,24 @@
 import { NextRequest } from "next/server";
 import { connectDB } from "@/lib/db";
 import Review from "@/models/review.model";
+import Product from "@/models/product.model";
 import { authMiddleware } from "@/middleware/auth.middleware";
 import { apiSuccess, apiError } from "@/utils/apiResponse";
 import { handleError } from "@/utils/errorHandler";
+
+async function updateProductRating(productId: string) {
+  const reviews = await Review.find({ product: productId });
+  const numReviews = reviews.length;
+  const rating =
+    numReviews > 0
+      ? reviews.reduce((acc, item) => acc + item.rating, 0) / numReviews
+      : 0;
+
+  await Product.findByIdAndUpdate(productId, {
+    ratings: Math.round(rating * 10) / 10,
+    numReviews,
+  });
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -17,7 +32,7 @@ export async function GET(req: NextRequest) {
 
     const reviews = await Review.find({ product: productId })
       .sort({ createdAt: -1 })
-      .populate("user", "name _id")
+      .populate("user", "name _id image")
       .lean();
 
     return apiSuccess({ reviews });
@@ -48,6 +63,8 @@ export async function POST(req: NextRequest) {
         comment,
       });
 
+      await updateProductRating(productId);
+
       return apiSuccess({ review }, "Review added successfully");
     } catch (err: any) {
       // Handle duplicate review error (unique index)
@@ -77,15 +94,22 @@ export async function PATCH(req: NextRequest) {
     if (!review) return apiError("Review not found", 404);
     if (review.user.toString() !== user.userId) return apiError("Not authorized", 403);
 
+    let changed = false;
     if (rating !== undefined) {
       if (rating < 1 || rating > 5) return apiError("Rating must be between 1 and 5", 400);
       review.rating = rating;
+      changed = true;
     }
     if (comment !== undefined) {
       review.comment = comment;
     }
 
     await review.save();
+    
+    if (changed) {
+      await updateProductRating(review.product.toString());
+    }
+
     return apiSuccess({ review }, "Review updated successfully");
   } catch (error) {
     return handleError(error);
@@ -108,7 +132,11 @@ export async function DELETE(req: NextRequest) {
     if (!review) return apiError("Review not found", 404);
     if (review.user.toString() !== user.userId) return apiError("Not authorized", 403);
 
+    const productId = review.product.toString();
     await review.deleteOne();
+    
+    await updateProductRating(productId);
+
     return apiSuccess({ message: "Review deleted" });
   } catch (error) {
     return handleError(error);
