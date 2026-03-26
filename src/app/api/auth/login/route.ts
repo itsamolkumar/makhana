@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       return apiError("Your account has been blocked. Please contact support.", 403);
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password ?? "");
 
     if (!isMatch) {
 

@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Customization from "@/models/customization.model";
-import { getServerSession } from "next-auth"; // wait, I should check auth logic, I'll restrict it by checking cookies or let middleware handle auth.
 
 export async function GET() {
   try {

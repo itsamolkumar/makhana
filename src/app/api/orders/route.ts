@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
     // ✅ TODO: Emit order creation event for notifications
     // eventEmitter.emit('order.created', orderResult.order);
 
-    if (orderData.paymentMethod === "cod" && process.env.EMAIL_USER) {
+    if (orderData.paymentMethod === "cod" && process.env.EMAIL_USER && orderResult.order) {
       const OrderModel = require("@/models/order.model").default;
       const populatedOrder = await OrderModel.findById(orderResult.order._id).populate("orderItems.product", "name");
       if (populatedOrder) {

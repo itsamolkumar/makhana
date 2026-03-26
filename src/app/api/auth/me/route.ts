@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
       return apiSuccess({ user: null }, "User not found in DB");
     }
 
-    const formattedUser = user.toObject ? user.toObject() : {
+    const formattedUser: any = user.toObject ? user.toObject() : {
       ...user,
       id: user._id.toString()
     };

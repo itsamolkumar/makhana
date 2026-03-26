@@ -22,6 +22,7 @@ export interface User {
 
 export interface Product {
   _id: string;
+  id?: string;
   name: string;
   slug: string;
   description: string;
@@ -34,6 +35,7 @@ export interface Product {
   weight?: string;
   ratings?: number;
   numReviews?: number;
+  sku?: string;
 }
 
 export interface Review {

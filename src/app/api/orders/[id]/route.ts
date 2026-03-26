@@ -104,7 +104,7 @@ export async function DELETE(
     // Validate request
     const validationResult = cancelOrderValidator.safeParse(body);
     if (!validationResult.success) {
-      const errors = validationResult.error.errors.map((e) => e.message).join(", ");
+      const errors = validationResult.error.issues.map((e) => e.message).join(", ");
       return apiError(`Validation failed: ${errors}`, 400);
     }
 

@@ -109,15 +109,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Add new address
-    const updatedUser = await User.findByIdAndUpdate(
+    const updatedUser: any = await User.findByIdAndUpdate(
       user.userId,
       { $push: { addresses: newAddress } },
       { new: true }
     ).select("addresses");
 
-    console.log("Updated user addresses count:", updatedUser?.addresses.length);
+    console.log("Updated user addresses count:", updatedUser?.addresses?.length);
+    const addedAddresses = updatedUser?.addresses || [];
     return apiSuccess(
-      { address: updatedUser.addresses[updatedUser.addresses.length - 1] },
+      { address: addedAddresses[addedAddresses.length - 1] },
       "Address added successfully"
     );
   } catch (error) {

@@ -8,7 +8,7 @@ import { handleError } from "@/utils/errorHandler";
 // PUT - Update address
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
@@ -16,12 +16,12 @@ export async function PUT(
     const user: any = await authMiddleware(req);
     if (!user) return apiError("Unauthorized", 401);
 
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
     const { fullName, mobile, pincode, state, city, area, landmark, isDefault } = body;
 
     // Find user and address
-    const userData = await User.findById(user.userId);
+    const userData: any = await User.findById(user.userId);
     if (!userData) return apiError("User not found", 404);
 
     // Find address by ObjectId or array index
@@ -67,7 +67,7 @@ export async function PUT(
 // DELETE - Remove address
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
@@ -75,10 +75,10 @@ export async function DELETE(
     const user: any = await authMiddleware(req);
     if (!user) return apiError("Unauthorized", 401);
 
-    const { id } = params;
+    const { id } = await params;
 
     // Find user
-    const userData = await User.findById(user.userId);
+    const userData: any = await User.findById(user.userId);
     if (!userData) return apiError("User not found", 404);
 
     // Find and remove address - support both ObjectId and array index

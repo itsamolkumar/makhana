@@ -176,3 +176,35 @@ export async function sendAdminOrderEmail(order: any, adminEmail: string) {
     `
   });
 }
+
+export async function sendAdminContactEmail(contact: any, adminEmail: string) {
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM,
+    to: adminEmail,
+    subject: `New Contact Message: ${contact.subject}`,
+    html: `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #eaebec;">
+      
+      <!-- Header -->
+      <div style="background-color: #1F4D36; padding: 30px 20px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 0.5px;">New Contact Submission</h1>
+        <p style="color: #e0e7e3; margin: 10px 0 0 0; font-size: 15px;">A user has submitted a new contact message.</p>
+      </div>
+      
+      <!-- Content Body -->
+      <div style="padding: 30px;">
+        <div style="background-color: #f8faf9; border-radius: 8px; padding: 20px; margin-bottom: 25px; border: 1px solid #edf2f0;">
+          <h2 style="margin: 0 0 15px 0; color: #1F4D36; font-size: 18px; border-bottom: 2px solid #e2e8e5; padding-bottom: 10px;">Contact Details</h2>
+          <p><strong>Name:</strong> ${contact.name}</p>
+          <p><strong>Email:</strong> ${contact.email}</p>
+          <p><strong>Subject:</strong> ${contact.subject}</p>
+          <p><strong>Message:</strong></p>
+          <div style="background-color: #ffffff; padding: 15px; border-radius: 6px; border: 1px solid #e2e8e5; white-space: pre-wrap; font-size: 15px; color: #475569;">
+            ${contact.message}
+          </div>
+        </div>
+      </div>
+    </div>
+    `
+  });
+}
