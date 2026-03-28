@@ -8,12 +8,10 @@ export async function adminMiddleware(req: NextRequest) {
 
   const user: any = await authMiddleware(req);
 
-  if (!user) return;
+  if (!user) throw new Error("Unauthorized");
 
   if (user.role !== "admin") {
-
-    return apiError("Admin access required", 403);
-
+    throw new Error("Admin access required");
   }
 
   return user;

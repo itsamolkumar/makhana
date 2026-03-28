@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   title: "Healthe Bites | Premium Makhana",
   description: "Premium makhana sourced directly from Bihar.",
   icons: {
-    icon: "/favicon.svg",
+    icon: "/favicon.png",
   },
 };
 
