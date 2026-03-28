@@ -63,7 +63,10 @@ export async function POST(req: NextRequest) {
       const cart = await Cart.findOne({ user: user.userId }).populate("items.product");
       if (cart && cart.items.length > 0) {
         cart.items.forEach((item: any) => {
-          subtotal += item.product.price * item.quantity;
+          const p = item.product;
+          const unit =
+            p.discountPrice != null && p.discountPrice < p.price ? p.discountPrice : p.price;
+          subtotal += unit * item.quantity;
         });
       }
     }

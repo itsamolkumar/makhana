@@ -4,6 +4,9 @@ import Cart from "@/models/cart.model";
 import Coupon from "@/models/coupon.model";
 import User from "@/models/user.model";
 import mongoose from "mongoose";
+import { GST_RATE } from "@/lib/pricing";
+
+export { GST_RATE };
 
 /**
  * Generate unique order number
@@ -21,11 +24,10 @@ export const generateOrderNumber = async (): Promise<string> => {
 };
 
 /**
- * Calculate tax based on total amount and state
- * Assuming 5% GST (can be made dynamic)
+ * Tax on taxable value (after coupon), 18% GST
  */
-export const calculateTax = (subtotal: number, taxRate: number = 0.05): number => {
-  return parseFloat((subtotal * taxRate).toFixed(2));
+export const calculateTax = (taxableAmount: number, taxRate: number = GST_RATE): number => {
+  return parseFloat((Math.max(0, taxableAmount) * taxRate).toFixed(2));
 };
 
 /**
@@ -149,11 +151,10 @@ export const createOrder = async (params: CreateOrderParams): Promise<{ success:
       couponRecord = couponResult.coupon;
     }
 
-    // Calculate other charges
-    const taxRate = 0.05; // 5% GST
-    const tax = calculateTax(subtotal, taxRate);
-    const shippingPrice = 0; // Free shipping for now
-    const totalPrice = subtotal + tax + shippingPrice - couponDiscount;
+    const taxableAfterCoupon = Math.max(0, subtotal - couponDiscount);
+    const tax = calculateTax(taxableAfterCoupon, GST_RATE);
+    const shippingPrice = 0;
+    const totalPrice = parseFloat((taxableAfterCoupon + tax + shippingPrice).toFixed(2));
 
     // Generate order number
     const orderNumber = await generateOrderNumber();
@@ -395,4 +396,37 @@ export const getOrderStats = async (userId?: string): Promise<any> => {
   ]);
 
   return stats[0] || { totalOrders: 0, totalRevenue: 0, avgOrderValue: 0 };
+};
+
+/**
+ * Let the order owner change payment method while payment is still unpaid (e.g. failed online → COD).
+ */
+export const updatePaymentMethodForOrder = async (
+  orderId: string,
+  userId: string,
+  paymentMethod: "razorpay" | "cod" | "upi" | "netbanking"
+): Promise<{ success: boolean; order?: IOrder; error?: string }> => {
+  try {
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return { success: false, error: "Order not found" };
+    }
+    if (order.user.toString() !== userId) {
+      return { success: false, error: "You are not allowed to update this order" };
+    }
+    if (order.paymentStatus === "paid") {
+      return { success: false, error: "This order is already paid" };
+    }
+    if (["cancelled", "delivered", "returned"].includes(order.orderStatus)) {
+      return { success: false, error: "This order can no longer be changed" };
+    }
+    order.paymentMethod = paymentMethod;
+    if (order.paymentStatus === "failed") {
+      order.paymentStatus = "pending";
+    }
+    await order.save();
+    return { success: true, order };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Failed to update payment method" };
+  }
 };

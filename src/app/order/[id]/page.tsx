@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Order } from "@/types";
 import toast from "react-hot-toast";
+import { GST_RATE } from "@/lib/pricing";
 
 export default function OrderPage() {
   const params = useParams();
@@ -15,6 +15,16 @@ export default function OrderPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
+  const [updatingMethod, setUpdatingMethod] = useState(false);
+
+  const isOnlineMethod = (m: string) => m === "razorpay" || m === "upi" || m === "netbanking";
+
+  const syncPaymentChoice = (o: any) => {
+    if (!o) return "razorpay" as const;
+    return isOnlineMethod(o.paymentMethod) ? ("razorpay" as const) : ("cod" as const);
+  };
+
+  const [paymentChoice, setPaymentChoice] = useState<"razorpay" | "cod">("razorpay");
 
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
@@ -76,7 +86,7 @@ export default function OrderPage() {
              
              if (verifyRes.ok) {
                toast.success("Payment successful!", { id: "verify-toast" });
-               window.location.reload();
+               router.push(`/order/confirmed/${order._id}?paid=1`);
              } else {
                const errorData = await verifyRes.json();
                toast.error(errorData?.message || "Payment verification failed", { id: "verify-toast" });
@@ -86,12 +96,13 @@ export default function OrderPage() {
                  body: JSON.stringify({ dbOrderId: order._id, error_description: "Signature mismatch" })
                });
                setPaying(false);
-               window.location.reload();
+               router.push(`/payment/failed?orderId=${order._id}`);
              }
           } catch (error) {
              console.error("Verification error", error);
              toast.error("An error occurred during verification", { id: "verify-toast" });
              setPaying(false);
+             router.push(`/payment/failed?orderId=${order._id}`);
           }
         },
         prefill: {
@@ -110,7 +121,7 @@ export default function OrderPage() {
                headers: { "Content-Type": "application/json" },
                body: JSON.stringify({ dbOrderId: order._id, error_description: "User closed modal" })
             });
-            window.location.reload();
+            router.push(`/payment/failed?orderId=${order._id}`);
           }
         }
       };
@@ -129,6 +140,7 @@ export default function OrderPage() {
                })
            });
            paymentObject.close();
+           router.push(`/payment/failed?orderId=${order._id}`);
       });
       paymentObject.open();
 
@@ -136,6 +148,37 @@ export default function OrderPage() {
        console.error(error);
        toast.error("Something went wrong");
        setPaying(false);
+    }
+  };
+
+  const applyPaymentMethod = async (method: "razorpay" | "cod") => {
+    if (!order?._id || updatingMethod) return;
+    const current = syncPaymentChoice(order);
+    if (method === current) return;
+
+    setUpdatingMethod(true);
+    try {
+      const res = await fetch(`/api/orders/${order._id}/payment-method`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentMethod: method }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data?.message || "Could not update payment option");
+        return;
+      }
+      setOrder(data.data.order);
+      setPaymentChoice(method);
+      toast.success(
+        method === "cod"
+          ? "You chose Cash on Delivery. Pay when your order arrives."
+          : "You chose online payment. Complete payment below when you are ready."
+      );
+    } catch {
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setUpdatingMethod(false);
     }
   };
 
@@ -148,7 +191,9 @@ export default function OrderPage() {
         const res = await fetch(`/api/orders/${orderId}`);
         const data = await res.json();
         if (res.ok) {
-          setOrder(data.data.order);
+          const o = data.data.order;
+          setOrder(o);
+          setPaymentChoice(syncPaymentChoice(o));
         } else {
           setError(data.message || "Order not found");
         }
@@ -203,27 +248,39 @@ export default function OrderPage() {
     return <span className="px-3 py-1 text-xs bg-yellow-100 text-yellow-700 rounded-full">Processing</span>;
   };
 
+  const subtotalVal = typeof order.subtotal === "number" ? order.subtotal : 0;
+  const taxVal = typeof order.tax === "number" ? order.tax : 0;
+  const couponDisc = typeof order.couponDiscount === "number" ? order.couponDiscount : 0;
+
   return (
-    <div className="min-h-screen bg-[#faf9f6] py-12 px-4">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col md:flex-row items-start justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Order #{order._id}</h1>
-            <p className="text-sm text-gray-600 mt-1">Placed on {new Date(order.createdAt || "").toLocaleDateString()}</p>
+    <div className="min-h-screen bg-[#faf9f6] px-3 py-8 sm:px-4 sm:py-12">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="truncate font-serif text-xl font-bold text-gray-900 sm:text-2xl md:text-3xl">
+              {order.orderNumber ? `Order ${order.orderNumber}` : `Order #${String(order._id).slice(-8).toUpperCase()}`}
+            </h1>
+            <p className="mt-1 text-xs text-gray-600 sm:text-sm">
+              Placed on{" "}
+              {new Date(order.createdAt || "").toLocaleString(undefined, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {statusBadge()}
             <Link
               href="/shop"
-              className="px-4 py-2 border border-gray-200 rounded-full text-sm text-gray-700 hover:bg-gray-50"
+              className="rounded-full border border-gray-200 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 sm:px-4 sm:text-sm"
             >
-              Continue Shopping
+              Continue shopping
             </Link>
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
+          <div className="order-2 space-y-4 sm:space-y-6 lg:order-1 lg:col-span-2">
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <h2 className="text-xl font-semibold mb-4">Shipping Address</h2>
               <p className="text-gray-700">
@@ -237,21 +294,21 @@ export default function OrderPage() {
               )}
             </div>
 
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-              <h2 className="text-xl font-semibold mb-4">Items</h2>
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-6">
+              <h2 className="mb-4 text-lg font-semibold sm:text-xl">Items</h2>
               <div className="space-y-4">
                 {order.orderItems.map((item: any, index: number) => (
-                  <div key={`item-${index}`} className="flex items-center gap-4">
+                  <div key={`item-${index}`} className="flex gap-3 sm:gap-4">
                     {item.image ? (
-                      <img src={item.image} alt={item.name} className="w-16 h-16 rounded-lg object-cover" />
+                      <img src={item.image} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover sm:h-16 sm:w-16" />
                     ) : (
-                      <div className="w-16 h-16 bg-gray-100 rounded-lg" />
+                      <div className="h-14 w-14 shrink-0 rounded-lg bg-gray-100 sm:h-16 sm:w-16" />
                     )}
-                    <div className="flex-1">
+                    <div className="min-w-0 flex-1">
                       <p className="font-medium text-gray-900">{item.name}</p>
                       <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="shrink-0 text-right">
                       <p className="font-semibold">₹{item.price * item.quantity}</p>
                       <p className="text-xs text-gray-500">₹{item.price} each</p>
                     </div>
@@ -261,43 +318,110 @@ export default function OrderPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h2 className="text-xl font-semibold mb-4">Order Summary</h2>
-            <div className="space-y-3">
+          <div className="order-1 lg:order-2">
+          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-6 lg:sticky lg:top-24">
+            <h2 className="mb-4 text-lg font-semibold sm:text-xl">Order summary</h2>
+            <div className="space-y-3 text-sm">
               <div className="flex justify-between text-gray-600">
                 <span>Subtotal</span>
-                <span>₹{order.totalPrice + (order.couponDiscount || 0)}</span>
+                <span className="font-medium text-gray-900">₹{subtotalVal.toFixed(2)}</span>
               </div>
-              {order.couponCode && (
+              {order.couponCode && couponDisc > 0 && (
                 <div className="flex justify-between text-green-600">
                   <span>Coupon ({order.couponCode})</span>
-                  <span>–₹{order.couponDiscount}</span>
+                  <span>−₹{couponDisc.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-gray-600">
-                <span>Delivery</span>
-                <span>Free</span>
+                <span>GST ({GST_RATE * 100}%)</span>
+                <span className="font-medium text-gray-900">₹{taxVal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-lg font-bold pt-3 border-t">
-                <span>Total</span>
-                <span>₹{order.totalPrice}</span>
+              <div className="flex justify-between text-gray-600">
+                <span>Delivery</span>
+                <span className="font-medium">Free</span>
+              </div>
+              <div className="flex justify-between border-t pt-3 text-base font-bold text-gray-900">
+                <span>Total (incl. GST)</span>
+                <span>₹{Number(order.totalPrice).toFixed(2)}</span>
               </div>
             </div>
 
-            {order.paymentMethod === "razorpay" && order.paymentStatus !== "paid" && (
-              <div className="mt-6 pt-6 border-t border-gray-100">
-                <div className="bg-orange-50 text-orange-800 p-4 rounded-xl mb-4 text-sm font-medium">
-                  Payment is pending or failed. Please complete your payment to process this order.
+            {order.paymentMethod === "cod" &&
+              order.paymentStatus !== "paid" &&
+              !["cancelled", "delivered", "returned"].includes(order.orderStatus || "") && (
+                <div className="mt-6 rounded-xl border border-emerald-100 bg-emerald-50/80 p-4 text-sm text-emerald-900">
+                  <p className="font-semibold">Pay securely online</p>
+                  <p className="mt-1 text-emerald-800/90">
+                    Switch to online payment below — amount includes {GST_RATE * 100}% GST (same as your order total).
+                  </p>
                 </div>
-                <button
-                  onClick={handlePayNow}
-                  disabled={paying}
-                  className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold hover:opacity-90 disabled:opacity-50 transition"
-                >
-                  {paying ? "Loading..." : "Pay Now"}
-                </button>
-              </div>
-            )}
+              )}
+
+            {order.paymentStatus !== "paid" &&
+              !["cancelled", "delivered", "returned"].includes(order.orderStatus || "") && (
+                <div className="mt-6 pt-6 border-t border-gray-100 space-y-4">
+                  <div className="bg-amber-50 text-amber-900 p-4 rounded-xl text-sm">
+                    <p className="font-medium mb-1">Payment not completed yet</p>
+                    <p className="text-amber-800/90">
+                      Choose how you want to pay. You can switch between online payment and cash on delivery
+                      before you complete the order.
+                    </p>
+                  </div>
+
+                  <fieldset disabled={updatingMethod} className="space-y-3">
+                    <legend className="text-sm font-semibold text-gray-800 mb-2">How would you like to pay?</legend>
+                    <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-200 cursor-pointer hover:bg-gray-50 has-[:checked]:border-[var(--color-primary)] has-[:checked]:bg-green-50/50">
+                      <input
+                        type="radio"
+                        name="paymode"
+                        className="mt-1"
+                        checked={paymentChoice === "razorpay"}
+                        onChange={() => void applyPaymentMethod("razorpay")}
+                      />
+                      <span>
+                        <span className="font-medium text-gray-900">Pay online</span>
+                        <span className="block text-xs text-gray-600 mt-0.5">UPI, card, or net banking via secure payment</span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-200 cursor-pointer hover:bg-gray-50 has-[:checked]:border-[var(--color-primary)] has-[:checked]:bg-green-50/50">
+                      <input
+                        type="radio"
+                        name="paymode"
+                        className="mt-1"
+                        checked={paymentChoice === "cod"}
+                        onChange={() => void applyPaymentMethod("cod")}
+                      />
+                      <span>
+                        <span className="font-medium text-gray-900">Cash on delivery (COD)</span>
+                        <span className="block text-xs text-gray-600 mt-0.5">Pay with cash when your order is delivered</span>
+                      </span>
+                    </label>
+                  </fieldset>
+
+                  {updatingMethod && (
+                    <p className="text-sm text-gray-500">Updating your choice…</p>
+                  )}
+
+                  {paymentChoice === "razorpay" && (
+                    <button
+                      type="button"
+                      onClick={handlePayNow}
+                      disabled={paying || updatingMethod}
+                      className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold hover:opacity-90 disabled:opacity-50 transition"
+                    >
+                      {paying ? "Opening payment…" : "Pay now (secure)"}
+                    </button>
+                  )}
+
+                  {paymentChoice === "cod" && !updatingMethod && (
+                    <p className="text-sm text-gray-600 text-center bg-gray-50 rounded-xl py-3 px-2">
+                      No online payment needed. Your order will be processed as{" "}
+                      <span className="font-medium text-gray-900">cash on delivery</span>.
+                    </p>
+                  )}
+                </div>
+              )}
+          </div>
           </div>
         </div>
       </div>

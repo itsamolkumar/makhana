@@ -41,7 +41,15 @@ export const updateOrderStatusValidator = z.object({
 });
 
 export const cancelOrderValidator = z.object({
-  cancellationReason: z.string().min(1).max(500).optional(),
+  cancellationReason: z
+    .string()
+    .min(1, "Please add a short reason for cancellation")
+    .max(500, "Reason is too long (max 500 characters)")
+    .optional(),
+});
+
+export const updatePaymentMethodValidator = z.object({
+  paymentMethod: z.enum(["razorpay", "cod", "upi", "netbanking"]),
 });
 
 export const assignDeliveryBoyValidator = z.object({

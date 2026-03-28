@@ -103,14 +103,69 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden">
         <div className="overflow-x-auto">
           {loading ? (
             <div className="p-10 flex justify-center"><Loader /></div>
           ) : users.length === 0 ? (
             <div className="p-10 text-center text-neutral-500">No users found</div>
           ) : (
-            <table className="w-full text-left border-collapse">
+            <>
+            {/* Mobile cards */}
+            <div className="grid gap-4 md:hidden">
+              {users.map((user) => (
+                <div
+                  key={user._id}
+                  className="space-y-3 rounded-2xl border border-neutral-100 bg-neutral-50/50 p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-5">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-neutral-900 truncate">{user.name}</p>
+                      <p className="text-sm text-neutral-500 break-all">{user.email}</p>
+                    </div>
+                    <span
+                      className={`shrink-0 px-2 py-0.5 text-xs font-medium rounded-full ${
+                        user.role === "admin"
+                          ? "bg-purple-100 text-purple-700"
+                          : user.role === "deliveryBoy"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-green-100 text-green-700"
+                      }`}
+                    >
+                      {user.role}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span
+                      className={`px-2 py-1 rounded-full font-medium ${
+                        user.isBlocked ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                      }`}
+                    >
+                      {user.isBlocked ? "Blocked" : "Active"}
+                    </span>
+                    <span className="text-neutral-400">
+                      Joined {new Date(user.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {user.role !== "admin" && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleBlock(user._id, user.isBlocked, user.role)}
+                      className={`w-full rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2 ${
+                        user.isBlocked
+                          ? "bg-green-50 text-green-700 border border-green-200"
+                          : "bg-red-50 text-red-700 border border-red-200"
+                      }`}
+                    >
+                      {user.isBlocked ? <ShieldCheck size={18} /> : <ShieldAlert size={18} />}
+                      {user.isBlocked ? "Unblock user" : "Block user"}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <table className="hidden md:table w-full text-left border-collapse">
               <thead>
                 <tr className="bg-neutral-50 border-b text-sm font-medium text-neutral-500 uppercase tracking-wider">
                   <th className="p-4">Name</th>
@@ -163,6 +218,7 @@ export default function AdminUsersPage() {
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </div>
       </div>

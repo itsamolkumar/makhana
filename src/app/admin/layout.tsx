@@ -18,6 +18,10 @@ export default function AdminLayout({ children }: any) {
   const { user, isAuthenticated, isInitialized } = useAppSelector((state) => state.auth);
 
   useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
     if (isInitialized) {
       if (!isAuthenticated) {
         toast.error("You are not logged in");
@@ -37,52 +41,52 @@ export default function AdminLayout({ children }: any) {
   }
 
   if (!isAuthenticated || user?.role !== "admin") {
-    return null; // or a loading spinner
+    return null;
   }
 
   return (
-    <div className="flex bg-neutral-50 min-h-screen">
+    <div className="min-h-screen bg-neutral-50">
+      {/* Desktop: fixed sidebar */}
+      <div className="hidden md:block fixed inset-y-0 left-0 z-30 w-64 border-r border-neutral-200 bg-white shadow-sm">
+        <Sidebar />
+      </div>
 
-      {/* Desktop Sidebar */}
-      <Sidebar className="hidden md:flex w-64 z-10" />
-
-      {/* Mobile Sidebar */}
+      {/* Mobile drawer */}
       <AnimatePresence>
         {open && (
           <>
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.5 }}
               exit={{ opacity: 0 }}
               onClick={() => setOpen(false)}
-              className="fixed inset-0 bg-black z-40 md:hidden"
+              className="fixed inset-0 z-[60] bg-black md:hidden"
             />
-            {/* Sidebar */}
             <motion.div
-              initial={{ x: -260 }}
+              initial={{ x: -280 }}
               animate={{ x: 0 }}
-              exit={{ x: -260 }}
-              transition={{ ease: "circOut", duration: 0.3 }}
-              className="fixed top-0 left-0 w-64 h-screen bg-white z-50 shadow-2xl md:hidden overflow-y-auto"
+              exit={{ x: -280 }}
+              transition={{ ease: "circOut", duration: 0.25 }}
+              className="fixed top-0 left-0 z-[70] h-screen w-[min(100vw-3rem,18rem)] bg-white shadow-2xl md:hidden overflow-y-auto border-r border-neutral-100"
             >
-              <button 
+              <button
+                type="button"
                 onClick={() => setOpen(false)}
-                className="absolute top-6 right-4 p-1.5 bg-neutral-100 text-neutral-600 rounded-full hover:bg-neutral-200 transition"
+                className="absolute top-4 right-3 p-2 rounded-full bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition"
+                aria-label="Close menu"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </button>
-              <Sidebar className="w-full border-none shadow-none pt-4" />
+              <Sidebar className="w-full border-0 shadow-none pt-14 pb-6" />
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      {/* Content */}
-      <div className="flex-1 flex flex-col">
+      {/* Main column: topbar fixed, content scrolls */}
+      <div className="flex min-h-screen flex-col md:pl-64">
         <Topbar setOpen={setOpen} />
-
-        <main className="p-4 md:p-6">{children}</main>
+        <main className="flex-1 px-4 pb-6 pt-16 md:px-6 md:pb-8">{children}</main>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { connectDB } from "@/lib/db";
 import { authMiddleware } from "@/middleware/auth.middleware";
 import { adminMiddleware } from "@/middleware/admin.middleware";
+import OrderModel from "@/models/order.model";
 import { apiSuccess, apiError } from "@/utils/apiResponse";
 import { handleError } from "@/utils/errorHandler";
 import {
@@ -106,6 +107,15 @@ export async function DELETE(
     if (!validationResult.success) {
       const errors = validationResult.error.issues.map((e) => e.message).join(", ");
       return apiError(`Validation failed: ${errors}`, 400);
+    }
+
+    const orderDoc = await OrderModel.findById(id).select("user");
+    if (!orderDoc) {
+      return apiError("Order not found", 404);
+    }
+    const isAdmin = user.role === "admin";
+    if (!isAdmin && orderDoc.user.toString() !== user.userId) {
+      return apiError("You can only cancel your own orders", 403);
     }
 
     // Cancel order with service

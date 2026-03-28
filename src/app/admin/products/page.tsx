@@ -123,20 +123,20 @@ export default function AdminProductsPage() {
     <div className="space-y-6">
 
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Products</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-semibold text-neutral-900 sm:text-2xl">Products</h1>
 
         <Link
           href="/admin/products/new"
-          className="bg-[var(--color-primary)] text-white px-4 py-2 rounded-xl flex items-center gap-2"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] px-4 py-2.5 text-sm font-medium text-white"
         >
           <Plus size={18}/>
-          Add Product
+          Add product
         </Link>
       </div>
 
       {/* Search + Filter */}
-      <div className="flex flex-wrap gap-2 items-center">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="flex-1 min-w-[220px]">
           <input
             placeholder="Search product..."
@@ -280,9 +280,72 @@ export default function AdminProductsPage() {
       )}
 
       {loading ? (
-        <Loader />
+        <div className="flex justify-center py-16"><Loader /></div>
       ) : (
-        <div className="bg-white rounded-2xl shadow overflow-x-auto">
+        <>
+        <div className="grid gap-3 md:hidden">
+          {products.map((p: any) => (
+            <div
+              key={p._id}
+              className="flex gap-3 rounded-2xl border border-neutral-100 bg-white p-4 shadow-sm"
+            >
+              {p.images?.[0] ? (
+                <img
+                  src={p.images[0]}
+                  alt=""
+                  className="h-20 w-20 shrink-0 rounded-xl object-cover bg-neutral-100"
+                />
+              ) : (
+                <div className="h-20 w-20 shrink-0 rounded-xl bg-neutral-100" />
+              )}
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-semibold text-neutral-900 line-clamp-2">{p.name}</p>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                      p.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {p.isActive ? "Active" : "Inactive"}
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-500">{p.category}</p>
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <span className="font-semibold text-neutral-900">₹{p.price}</span>
+                  <span className="text-neutral-500">Stock: {p.stock}</span>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <Link
+                    href={`/admin/products/${p._id}`}
+                    className="flex flex-1 items-center justify-center gap-1 rounded-xl border border-neutral-200 py-2 text-sm font-medium text-neutral-800"
+                  >
+                    <Edit2 size={16} /> Edit
+                  </Link>
+                  {p.isActive ? (
+                    <button
+                      type="button"
+                      className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-red-50 py-2 text-sm font-medium text-red-600"
+                      onClick={() => handleDelete(p._id)}
+                    >
+                      <Trash2 size={16} /> Remove
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-green-50 py-2 text-sm font-medium text-green-700"
+                      onClick={() => handleToggleActive(p._id, p.isActive)}
+                    >
+                      <CheckCircle2 size={16} /> Activate
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden md:block bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-[var(--color-bg)]">
             <tr className="text-left">
@@ -298,13 +361,13 @@ export default function AdminProductsPage() {
 
           <tbody>
             {products.map((p:any)=>(
-              <tr key={p._id} className="border-t hover:bg-gray-50">
+              <tr key={p._id} className="border-t border-neutral-100 hover:bg-neutral-50/80">
 
                 <td className="p-4">
-                  <img src={p.images[0]} className="h-12 w-12 rounded-lg object-cover"/>
+                  <img src={p.images?.[0]} alt="" className="h-12 w-12 rounded-lg object-cover bg-neutral-100"/>
                 </td>
 
-                <td className="font-medium">{p.name}</td>
+                <td className="font-medium max-w-[200px]">{p.name}</td>
                 <td>{p.category}</td>
                 <td>₹{p.price}</td>
                 <td>{p.stock}</td>
@@ -318,36 +381,42 @@ export default function AdminProductsPage() {
                   </span>
                 </td>
 
-                <td className="p-4 text-right flex gap-2 justify-end">
+                <td className="p-4">
+                  <div className="flex justify-end gap-2">
                   <Link
                     href={`/admin/products/${p._id}`}
-                    className="p-2 bg-[var(--color-bg)] rounded-lg"
+                    className="p-2 bg-[var(--color-bg)] rounded-lg inline-flex"
                   >
                     <Edit2 size={16}/>
                   </Link>
 
                   {p.isActive ? (
                     <button 
-                      className="p-2 bg-red-50 rounded-lg"
+                      type="button"
+                      className="p-2 bg-red-50 rounded-lg inline-flex"
                       onClick={() => handleDelete(p._id)}
                     >
                       <Trash2 size={16} className="text-red-500"/>
                     </button>
                   ) : (
                     <button
-                      className="p-2 bg-green-50 rounded-lg"
+                      type="button"
+                      className="p-2 bg-green-50 rounded-lg inline-flex"
                       onClick={() => handleToggleActive(p._id, p.isActive)}
                     >
                       <CheckCircle2 size={16} className="text-green-500" />
                     </button>
                   )}
+                  </div>
                 </td>
 
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </div>
+      </>
       )}
 
       {!loading && products.length === 0 && (

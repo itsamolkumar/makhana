@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { Product } from "@/types";
 import { useAppDispatch } from "@/redux/hooks";
@@ -32,24 +31,22 @@ export default function ProductCard({ product }: ProductCardProps) {
     >
       <Link href={`/shop/${product.slug}`} className="flex flex-col h-full relative cursor-pointer">
         {/* IMAGE AREA (Dominant) */}
-        <div className="relative bg-[#F7F2EA] h-72 flex items-center justify-center overflow-hidden">
-
+        <div className="relative aspect-[4/3] w-full overflow-hidden bg-gradient-to-b from-[#faf6ef] to-[#f0e8dc]">
           {hasDiscount && (
-            <div className="absolute top-4 left-4 bg-[var(--color-primary)] text-white text-[11px] font-bold tracking-widest px-3 py-1.5 rounded-full shadow-lg z-20">
-              SALE
+            <div className="absolute left-3 top-3 z-20 rounded-full bg-[var(--color-primary)] px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-white shadow-md">
+              Sale
             </div>
           )}
 
           <motion.img
             src={product.images && product.images.length > 0 ? product.images[0] : "/makhana-premium1.png"}
             alt={product.name}
-            whileHover={{ scale: 1.07 }}
-            transition={{ duration: 0.4 }}
-            className="w-full h-56 object-contain p-4 drop-shadow-[0_20px_25px_rgba(0,0,0,0.15)] z-0"
+            whileHover={{ scale: 1.04 }}
+            transition={{ duration: 0.35 }}
+            className="h-full w-full object-cover object-center"
           />
 
-          {/* Subtle Gradient Depth */}
-          <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/5 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/10 to-transparent" />
         </div>
 
         {/* CONTENT AREA */}

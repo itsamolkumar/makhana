@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import AuthLoading from "@/components/AuthLoading";
@@ -10,6 +10,7 @@ import { updateUser } from "@/redux/slices/authSlice";
 import { motion } from "framer-motion";
 import { MapPin, Plus, Edit2, Trash2, CreditCard, Truck, CheckCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { computeOrderTotals, GST_RATE } from "@/lib/pricing";
 import Link from "next/link";
 import toast from "react-hot-toast";
 
@@ -26,10 +27,18 @@ interface Address {
 }
 
 export default function CheckoutPage() {
-  const { items, subtotal, discount, total } = useAppSelector((state) => state.cart);
+  const { items, subtotal, discount, total, appliedCoupon: cartCoupon } = useAppSelector((state) => state.cart);
   const { user } = useAppSelector((state) => state.auth);
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const [payOrderId, setPayOrderId] = useState<string | null>(null);
+  const [payOrder, setPayOrder] = useState<any>(null);
+  const [payOrderLoading, setPayOrderLoading] = useState(false);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    setPayOrderId(q.get("payOrder"));
+  }, []);
 
   // Debug logging
   useEffect(() => {
@@ -45,7 +54,12 @@ export default function CheckoutPage() {
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [couponDiscount, setCouponDiscount] = useState(0);
-  const [finalTotal, setFinalTotal] = useState(total);
+
+  const effectiveDiscount = appliedCoupon ? couponDiscount : discount;
+  const { taxable, gst: gstAmount, total: totalDue } = useMemo(
+    () => computeOrderTotals(subtotal, effectiveDiscount),
+    [subtotal, effectiveDiscount]
+  );
 
   // Address form state
   const [addressForm, setAddressForm] = useState<Address>({
@@ -74,12 +88,30 @@ export default function CheckoutPage() {
     console.log("Selected address index:", selectedAddress);
   }, [addresses]);
 
-  // Redirect to cart if no items (but not during order placement)
+  // Redirect to cart if no items (skip when paying an existing order)
   useEffect(() => {
+    if (payOrderId) return;
     if (items.length === 0 && isAuthorized && !placingOrder) {
       router.push("/cart");
     }
-  }, [items.length, isAuthorized, placingOrder, router]);
+  }, [items.length, isAuthorized, placingOrder, router, payOrderId]);
+
+  // Load existing order for "pay again" flow
+  useEffect(() => {
+    if (!payOrderId || !isAuthorized) return;
+    setPayOrderLoading(true);
+    fetch(`/api/orders/${payOrderId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.data?.order) {
+          setPayOrder(d.data.order);
+        } else {
+          toast.error(d.message || "Order not found");
+        }
+      })
+      .catch(() => toast.error("Could not load order"))
+      .finally(() => setPayOrderLoading(false));
+  }, [payOrderId, isAuthorized]);
 
   // Load user addresses when authorized
   useEffect(() => {
@@ -87,13 +119,6 @@ export default function CheckoutPage() {
       fetchUserAddresses();
     }
   }, [isAuthorized, user]);
-
-  // Update final total when coupon changes
-  useEffect(() => {
-    if (!appliedCoupon) {
-      setFinalTotal(total);
-    }
-  }, [total, appliedCoupon]);
 
   const fetchUserAddresses = async () => {
     try {
@@ -296,7 +321,6 @@ export default function CheckoutPage() {
       if (res.ok) {
         setAppliedCoupon(data.data);
         setCouponDiscount(data.data.discount);
-        setFinalTotal(data.data.finalPrice);
         toast.success("Coupon applied successfully!");
       } else {
         toast.error(data.message || "Invalid coupon code");
@@ -312,7 +336,6 @@ export default function CheckoutPage() {
     setAppliedCoupon(null);
     setCouponDiscount(0);
     setCouponCode("");
-    setFinalTotal(total);
     toast.success("Coupon removed");
   };
 
@@ -336,18 +359,20 @@ export default function CheckoutPage() {
     setPlacingOrder(true);
     try {
       const shippingAddress = addresses[Number(selectedAddress)];
+      const unitPrice = (p: (typeof items)[0]["product"]) =>
+        (p.discountPrice != null && p.discountPrice < p.price ? p.discountPrice : p.price) as number;
       const orderData = {
-        orderItems: items.map(item => ({
+        orderItems: items.map((item) => ({
           product: item.product._id || item.product.id,
           name: item.product.name,
-          price: item.product.price,
+          price: unitPrice(item.product),
           quantity: item.quantity,
           image: item.product.images?.[0],
-          sku: item.product.sku
+          sku: item.product.sku,
         })),
         shippingAddress,
         paymentMethod,
-        couponCode: appliedCoupon?.coupon,
+        couponCode: appliedCoupon?.coupon ?? cartCoupon?.code,
         notes: "",
       };
 
@@ -367,8 +392,10 @@ export default function CheckoutPage() {
       }
 
       const responseData = await res.json();
-      const dbOrderId = responseData.data.order._id;
-      
+      const createdOrder = responseData.data.order;
+      const dbOrderId = createdOrder._id;
+      const amountToCharge = Number(createdOrder.totalPrice);
+
       // Order created successfully, clear cart.
       dispatch(clearCart());
 
@@ -376,14 +403,16 @@ export default function CheckoutPage() {
         const isLoaded = await loadRazorpayScript();
         if (!isLoaded) {
           toast.error("Razorpay SDK failed to load. You can pay later from your Orders page.");
-          router.push(`/order/${dbOrderId}`);
+          router.push(`/payment/failed?orderId=${dbOrderId}`);
+          setPlacingOrder(false);
+          setLoading(false);
           return;
         }
 
         const createRes = await fetch("/api/payment/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: finalTotal }),
+          body: JSON.stringify({ amount: amountToCharge }),
         });
 
         const orderDataResult = await createRes.json();
@@ -395,7 +424,9 @@ export default function CheckoutPage() {
              headers: { "Content-Type": "application/json" },
              body: JSON.stringify({ dbOrderId, error_description: "Failed to initialize razorpay model" })
           });
-          router.push(`/order/${dbOrderId}`);
+          router.push(`/payment/failed?orderId=${dbOrderId}`);
+          setPlacingOrder(false);
+          setLoading(false);
           return;
         }
 
@@ -425,7 +456,7 @@ export default function CheckoutPage() {
                
                if (verifyRes.ok) {
                  toast.success("Payment successful!", { id: "verify-toast" });
-                 router.push(`/order/${dbOrderId}`);
+                 router.push(`/order/confirmed/${dbOrderId}?paid=1`);
                } else {
                  const errorData = await verifyRes.json();
                  toast.error(errorData?.message || "Payment verification failed", { id: "verify-toast" });
@@ -434,12 +465,12 @@ export default function CheckoutPage() {
                    headers: { "Content-Type": "application/json" },
                    body: JSON.stringify({ dbOrderId, error_description: "Signature mismatch" })
                  });
-                 router.push(`/order/${dbOrderId}`);
+                 router.push(`/payment/failed?orderId=${dbOrderId}`);
                }
             } catch (error) {
                console.error("Verification error", error);
                toast.error("An error occurred during verification", { id: "verify-toast" });
-               router.push(`/order/${dbOrderId}`);
+               router.push(`/payment/failed?orderId=${dbOrderId}`);
             }
           },
           prefill: {
@@ -452,13 +483,13 @@ export default function CheckoutPage() {
           },
           modal: {
             ondismiss: async function() {
-              toast.error("Payment cancelled. You can complete it from your Orders page.");
+              toast.error("Payment cancelled.");
               await fetch("/api/payment/fail", {
                  method: "POST",
                  headers: { "Content-Type": "application/json" },
                  body: JSON.stringify({ dbOrderId, error_description: "User closed modal" })
               });
-              router.push(`/order/${dbOrderId}`);
+              router.push(`/payment/failed?orderId=${dbOrderId}`);
             }
           }
         };
@@ -475,18 +506,122 @@ export default function CheckoutPage() {
                     razorpay_payment_id: response.error.metadata?.payment_id
                  })
              });
+             router.push(`/payment/failed?orderId=${dbOrderId}`);
              paymentObject.close();
         });
         paymentObject.open();
+        setPlacingOrder(false);
+        setLoading(false);
 
       } else {
         toast.success("Order placed successfully!");
-        router.push(`/order/${dbOrderId}`);
+        router.push(`/order/confirmed/${dbOrderId}?method=cod`);
+        setPlacingOrder(false);
+        setLoading(false);
       }
     } catch (error) {
       console.error("Order placement error:", error);
       toast.error("Failed to process order");
       setPlacingOrder(false);
+      setLoading(false);
+    }
+  };
+
+  const payExistingOrderWithRazorpay = async () => {
+    if (!payOrder?._id) return;
+    setLoading(true);
+    try {
+      const isLoaded = await loadRazorpayScript();
+      if (!isLoaded) {
+        toast.error("Payment SDK failed to load.");
+        return;
+      }
+      const dbOrderId = payOrder._id;
+      const amountToCharge = Number(payOrder.totalPrice);
+      const createRes = await fetch("/api/payment/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: amountToCharge }),
+      });
+      const orderDataResult = await createRes.json();
+      if (!createRes.ok) {
+        toast.error(orderDataResult?.message || "Failed to start payment");
+        return;
+      }
+      const { orderId: rzp_order_id, amount, keyId } = orderDataResult.data;
+      const addr = payOrder.shippingAddress;
+      const options = {
+        key: keyId,
+        amount: amount.toString(),
+        currency: "INR",
+        name: "HealtheBites",
+        description: `Order #${String(dbOrderId).slice(-8)}`,
+        image: "/makhana-premium1.png",
+        order_id: rzp_order_id,
+        handler: async function (response: any) {
+          try {
+            toast.loading("Verifying payment...", { id: "verify-toast" });
+            const verifyRes = await fetch("/api/payment/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature,
+                dbOrderId,
+              }),
+            });
+            if (verifyRes.ok) {
+              toast.success("Payment successful!", { id: "verify-toast" });
+              router.push(`/order/confirmed/${dbOrderId}?paid=1`);
+            } else {
+              toast.error("Verification failed", { id: "verify-toast" });
+              await fetch("/api/payment/fail", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ dbOrderId, error_description: "Verify failed" }),
+              });
+              router.push(`/payment/failed?orderId=${dbOrderId}`);
+            }
+          } catch {
+            router.push(`/payment/failed?orderId=${dbOrderId}`);
+          }
+        },
+        prefill: {
+          name: addr?.fullName,
+          email: user?.email || "",
+          contact: addr?.mobile,
+        },
+        theme: { color: "#16a34a" },
+        modal: {
+          ondismiss: async function () {
+            await fetch("/api/payment/fail", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ dbOrderId, error_description: "User closed modal" }),
+            });
+            router.push(`/payment/failed?orderId=${dbOrderId}`);
+          },
+        },
+      };
+      const paymentObject = new (window as any).Razorpay(options);
+      paymentObject.on("payment.failed", async function (response: any) {
+        await fetch("/api/payment/fail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dbOrderId,
+            error_description: response.error?.description,
+            razorpay_payment_id: response.error?.metadata?.payment_id,
+          }),
+        });
+        router.push(`/payment/failed?orderId=${dbOrderId}`);
+        paymentObject.close();
+      });
+      paymentObject.open();
+    } catch {
+      toast.error("Could not start payment");
+    } finally {
       setLoading(false);
     }
   };
@@ -499,11 +634,67 @@ export default function CheckoutPage() {
   }
 
   if (!isAuthorized) {
-    return <AuthLoading 
-      message="Redirecting to login..."
-      description="Please login to continue with checkout"
-      loginUrl="/login?redirectTo=/checkout"
-    />;
+    const backToCheckout = payOrderId
+      ? `/checkout?payOrder=${encodeURIComponent(payOrderId)}`
+      : "/checkout";
+    return (
+      <AuthLoading
+        message="Redirecting to login..."
+        description="Please login to continue with checkout"
+        loginUrl={`/login?redirectTo=${encodeURIComponent(backToCheckout)}`}
+      />
+    );
+  }
+
+  if (payOrderId) {
+    if (payOrderLoading) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-[#faf9f6]">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
+        </div>
+      );
+    }
+    if (payOrder?.paymentStatus === "paid") {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#faf9f6] px-4 text-center">
+          <p className="text-lg text-neutral-700">This order is already paid.</p>
+          <Link href={`/order/${payOrder._id}`} className="text-[var(--color-primary)] font-medium underline">
+            View order
+          </Link>
+          <Link href="/" className="text-sm text-neutral-500">
+            Home
+          </Link>
+        </div>
+      );
+    }
+    if (payOrder) {
+      return (
+        <div className="min-h-screen bg-[#faf9f6] px-4 py-10">
+          <div className="mx-auto max-w-md rounded-3xl border border-neutral-100 bg-white p-6 shadow-sm">
+            <h1 className="mb-2 font-serif text-2xl font-bold text-[var(--heading-color)]">Complete payment</h1>
+            <p className="mb-6 text-sm text-neutral-600">
+              Pay ₹{payOrder.totalPrice} securely for order #{String(payOrder._id).slice(-8).toUpperCase()}
+            </p>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => void payExistingOrderWithRazorpay()}
+              className="mb-4 w-full rounded-full bg-[var(--color-primary)] py-3 font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {loading ? "Please wait…" : "Pay now"}
+            </button>
+            <div className="flex flex-col gap-2 text-center text-sm">
+              <Link href={`/order/${payOrder._id}`} className="text-[var(--color-primary)] hover:underline">
+                View order details
+              </Link>
+              <Link href="/" className="text-neutral-500 hover:underline">
+                Home
+              </Link>
+            </div>
+          </div>
+        </div>
+      );
+    }
   }
 
   return (
@@ -843,19 +1034,29 @@ export default function CheckoutPage() {
                 <span className="font-medium">₹{subtotal}</span>
               </div>
 
-              {discount > 0 && (
+              {discount > 0 && !appliedCoupon && (
                 <div className="flex justify-between text-green-600">
-                  <span>Cart Discount</span>
+                  <span>Cart discount</span>
                   <span>-₹{discount}</span>
                 </div>
               )}
 
               {couponDiscount > 0 && (
                 <div className="flex justify-between text-green-600">
-                  <span>Coupon Discount</span>
+                  <span>Coupon discount</span>
                   <span>-₹{couponDiscount}</span>
                 </div>
               )}
+
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Taxable amount</span>
+                <span className="font-medium">₹{taxable.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">GST ({GST_RATE * 100}% incl.)</span>
+                <span className="font-medium">₹{gstAmount.toFixed(2)}</span>
+              </div>
 
               <div className="flex justify-between">
                 <span className="text-gray-600">Delivery</span>
@@ -863,8 +1064,8 @@ export default function CheckoutPage() {
               </div>
 
               <div className="flex justify-between text-lg font-bold pt-3 border-t">
-                <span>Total</span>
-                <span>₹{finalTotal}</span>
+                <span>Total to pay</span>
+                <span>₹{totalDue.toFixed(2)}</span>
               </div>
             </div>
 

@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { connectDB } from "@/lib/db";
 import { authMiddleware } from "@/middleware/auth.middleware";
-import { adminMiddleware } from "@/middleware/admin.middleware";
 import { apiSuccess, apiError } from "@/utils/apiResponse";
 import { handleError } from "@/utils/errorHandler";
 import { sendAdminOrderEmail } from "@/lib/email";
@@ -27,7 +26,7 @@ export async function GET(req: NextRequest) {
     const user: any = await authMiddleware(req);
     if (!user) return apiError("Unauthorized", 401);
 
-    const isAdmin = await adminMiddleware(req);
+    const isAdmin = user.role === "admin";
 
     const { searchParams } = new URL(req.url);
     const page = Number(searchParams.get("page")) || 1;

@@ -5,7 +5,7 @@ import { useAppSelector } from "@/redux/hooks";
 import { Coupon } from "@/types";
 import { getCoupons, createCoupon, updateCoupon, deleteCoupon } from "@/services/couponService";
 import toast from "react-hot-toast";
-import { Plus, Edit, Trash2, Search, Filter } from "lucide-react";
+import { Plus, Edit, Trash2, Search } from "lucide-react";
 
 export default function CouponsPage() {
   const { user } = useAppSelector((state) => state.auth);
@@ -138,40 +138,41 @@ export default function CouponsPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Coupon Management</h1>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-neutral-900 sm:text-2xl">Coupons</h1>
         <button
+          type="button"
           onClick={() => {
             setEditingCoupon(null);
             resetForm();
             setShowForm(true);
           }}
-          className="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:opacity-90"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
         >
           <Plus size={18} />
-          Add Coupon
+          Add coupon
         </button>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4 mb-6">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
           <input
             type="text"
             placeholder="Search coupons..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+            className="w-full rounded-xl border border-neutral-200 py-2.5 pl-10 pr-4 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+          className="w-full rounded-xl border border-neutral-200 px-4 py-2.5 text-sm sm:w-auto sm:min-w-[160px]"
         >
-          <option value="">All Status</option>
+          <option value="">All status</option>
           <option value="active">Active</option>
           <option value="expired">Expired</option>
           <option value="inactive">Inactive</option>
@@ -180,8 +181,8 @@ export default function CouponsPage() {
 
       {/* Coupon Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
             <h2 className="text-xl font-bold mb-4">
               {editingCoupon ? "Edit Coupon" : "Add New Coupon"}
             </h2>
@@ -298,79 +299,115 @@ export default function CouponsPage() {
         </div>
       )}
 
-      {/* Coupons Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      {/* Coupons list */}
+      <div className="overflow-hidden rounded-2xl border border-neutral-100 bg-white shadow-sm">
         {loading ? (
           <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-primary)] mx-auto"></div>
-            <p className="mt-2 text-gray-600">Loading coupons...</p>
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-primary)] border-t-transparent" />
+            <p className="mt-2 text-sm text-neutral-600">Loading coupons…</p>
           </div>
         ) : coupons.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            No coupons found
-          </div>
+          <div className="p-8 text-center text-neutral-500">No coupons found</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Min Order</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usage</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {coupons.map((coupon) => (
-                  <tr key={coupon._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="font-medium text-gray-900">{coupon.code}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {coupon.discountType === "percentage" ? `${coupon.discountValue}%` : `₹${coupon.discountValue}`}
-                        {coupon.maxDiscount ? coupon.maxDiscount > 0 && coupon.discountType === "percentage" && (
-                          <div className="text-xs text-gray-500">Max: ₹{coupon.maxDiscount}</div>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      ₹{coupon.minOrder || 0}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(coupon.expiry).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {coupon.usedCount || 0}
-                      {coupon.usageLimit && ` / ${coupon.usageLimit}`}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(coupon)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleEdit(coupon)}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(coupon._id!)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
+          <>
+            <div className="divide-y divide-neutral-100 md:hidden">
+              {coupons.map((coupon) => (
+                <div key={coupon._id} className="space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-mono text-lg font-bold text-neutral-900">{coupon.code}</span>
+                    {getStatusBadge(coupon)}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <p className="text-xs text-neutral-500">Discount</p>
+                      <p className="font-medium">
+                        {coupon.discountType === "percentage"
+                          ? `${coupon.discountValue}%`
+                          : `₹${coupon.discountValue}`}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-neutral-500">Min order</p>
+                      <p className="font-medium">₹{coupon.minOrder || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-neutral-500">Expires</p>
+                      <p className="font-medium">{new Date(coupon.expiry).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-neutral-500">Used</p>
+                      <p className="font-medium">
+                        {coupon.usedCount || 0}
+                        {coupon.usageLimit ? ` / ${coupon.usageLimit}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleEdit(coupon)}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-neutral-200 py-2 text-sm font-medium text-blue-700"
+                    >
+                      <Edit size={16} /> Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(coupon._id!)}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 py-2 text-sm font-medium text-red-700"
+                    >
+                      <Trash2 size={16} /> Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[800px]">
+                <thead className="bg-neutral-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Code</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Discount</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Min order</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Expiry</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Usage</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Status</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-neutral-500">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {coupons.map((coupon) => (
+                    <tr key={coupon._id} className="hover:bg-neutral-50/80">
+                      <td className="px-4 py-3 font-mono font-semibold text-neutral-900">{coupon.code}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {coupon.discountType === "percentage" ? `${coupon.discountValue}%` : `₹${coupon.discountValue}`}
+                        {coupon.maxDiscount && coupon.maxDiscount > 0 && coupon.discountType === "percentage" && (
+                          <div className="text-xs text-neutral-500">Max ₹{coupon.maxDiscount}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm">₹{coupon.minOrder || 0}</td>
+                      <td className="px-4 py-3 text-sm">{new Date(coupon.expiry).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {coupon.usedCount || 0}
+                        {coupon.usageLimit && ` / ${coupon.usageLimit}`}
+                      </td>
+                      <td className="px-4 py-3">{getStatusBadge(coupon)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button type="button" onClick={() => handleEdit(coupon)} className="rounded-lg p-2 text-blue-600 hover:bg-blue-50">
+                            <Edit size={16} />
+                          </button>
+                          <button type="button" onClick={() => handleDelete(coupon._id!)} className="rounded-lg p-2 text-red-600 hover:bg-red-50">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

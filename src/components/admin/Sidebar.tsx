@@ -9,6 +9,7 @@ import {
   ShoppingCart,
   Settings,
   Users,
+  ExternalLink,
 } from "lucide-react";
 
 const menu = [
@@ -25,24 +26,32 @@ export default function Sidebar({ className = "" }: { className?: string }) {
     <motion.aside
       initial={{ x: -60, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
-      className={`flex flex-col h-screen bg-white border-r border-neutral-200 shadow-sm p-5 ${className}`}
+      className={`flex h-full min-h-screen flex-col overflow-y-auto bg-white p-5 ${className}`}
     >
       <h2 className="text-xl font-semibold mb-8 text-[var(--color-primary)]">
         Admin Panel
       </h2>
 
-      <nav className="flex flex-col gap-2">
+      <nav className="flex flex-col gap-2 flex-1">
         {menu.map((item) => (
           <Link
             key={item.name}
             href={item.href}
-            className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-neutral-100 transition"
+            className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-neutral-100 transition text-neutral-800"
           >
             <item.icon size={18} />
             {item.name}
           </Link>
         ))}
       </nav>
+
+      <Link
+        href="/"
+        className="mt-6 flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-3 text-sm font-medium text-[var(--color-primary)] hover:bg-emerald-50/80"
+      >
+        <ExternalLink size={16} />
+        View store
+      </Link>
     </motion.aside>
   );
 }

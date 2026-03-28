@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AnimatePresence } from "framer-motion";
+import { usePathname } from "next/navigation";
 import Navbar from "@/components/Navbar";
-import Loader from "@/components/Loader";
 import Footer from "@/components/Footer";
 import Providers from "./providers";
 
@@ -12,27 +10,14 @@ export default function ClientLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 2500);
-
-    return () => clearTimeout(timer);
-  }, []);
+  const pathname = usePathname();
+  const isAdminRoute = pathname?.startsWith("/admin") ?? false;
 
   return (
-    <>
-      <AnimatePresence>{loading && <Loader />}</AnimatePresence>
-
-      {!loading && (
-        <Providers>
-          <Navbar />
-          {children}
-          <Footer />
-        </Providers>
-      )}
-    </>
+    <Providers>
+      {!isAdminRoute && <Navbar />}
+      <div className={isAdminRoute ? "min-h-screen" : "min-h-screen pt-[70px]"}>{children}</div>
+      {!isAdminRoute && <Footer />}
+    </Providers>
   );
 }

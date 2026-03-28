@@ -30,15 +30,17 @@ export default function BiharStory() {
         {/* Image Side */}
         <FadeUp>
           <motion.div
-            whileHover={{ scale: 1.02 }}
+            whileHover={{ scale: 1.01 }}
             transition={{ duration: 0.4 }}
-            className="rounded-3xl overflow-hidden shadow-xl bg-neutral-50 flex items-center justify-center p-2 h-[350px] md:h-[500px]"
+            className="overflow-hidden rounded-3xl shadow-xl ring-1 ring-black/5"
           >
-            <img
-              src={rootImage}
-              alt="Bihar Makhana Source"
-              className="w-full h-full object-contain object-center rounded-2xl"
-            />
+            <div className="aspect-[4/3] w-full min-h-[240px] md:aspect-[16/10] md:min-h-[320px]">
+              <img
+                src={rootImage}
+                alt="Bihar Makhana Source"
+                className="h-full w-full object-cover object-center"
+              />
+            </div>
           </motion.div>
         </FadeUp>
 
