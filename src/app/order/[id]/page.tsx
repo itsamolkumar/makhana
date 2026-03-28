@@ -56,7 +56,7 @@ export default function OrderPage() {
         key: keyId, 
         amount: amount.toString(),
         currency: "INR",
-        name: "Health e Bites",
+        name: "HealtheBites",
         description: `Order #${order._id.slice(-8).toUpperCase()}`,
         image: "/makhana-premium1.png", 
         order_id: rzp_order_id,

@@ -405,7 +405,7 @@ export default function CheckoutPage() {
           key: keyId, 
           amount: amount.toString(),
           currency: "INR",
-          name: "Health e Bites",
+          name: "HealtheBites",
           description: "Makhana Store Purchase",
           image: "/makhana-premium1.png", 
           order_id: rzp_order_id,
