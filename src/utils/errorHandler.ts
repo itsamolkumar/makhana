@@ -35,16 +35,17 @@ export function handleError(error: any) {
 
   }
 
-  // Authentication errors
   if (error.message === "Unauthorized" || error.message === "Invalid token" || error.message === "Authentication failed") {
     return NextResponse.json(
-      {
-        success: false,
-        message: error.message
-      },
-      {
-        status: 401
-      }
+      { success: false, message: error.message },
+      { status: 401 }
+    );
+  }
+
+  if (error.message === "Admin access required") {
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 403 }
     );
   }
 

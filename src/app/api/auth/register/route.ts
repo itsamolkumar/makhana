@@ -34,33 +34,30 @@ export async function POST(req: NextRequest) {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await User.create({
-
       name,
       email,
       password: hashedPassword,
       mobile,
-      isVerified: true // Temporarily set to true for testing
-
+      isVerified: false
     });
 
-    // Skip OTP creation and email sending for testing
-    // const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    // const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-    // await Otp.deleteMany({ email });
-    // await Otp.create({
-    //   email,
-    //   otp,
-    //   type: "signup",
-    //   expiresAt
-    // });
-    // await sendOtpEmail(email, otp);
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    
+    await Otp.deleteMany({ email });
+    
+    await Otp.create({
+      email,
+      otp,
+      type: "signup",
+      expiresAt
+    });
+
+    await sendOtpEmail(email, otp);
 
     return apiSuccess(
-
       null,
-
-      "User registered successfully (testing mode)"
-
+      "OTP sent successfully. Please check your email to verify your account."
     );
 
   } catch (error) {
