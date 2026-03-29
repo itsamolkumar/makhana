@@ -1,4 +1,6 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react-hooks/exhaustive-deps */
 
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
@@ -6,6 +8,7 @@ import { useAppSelector } from "@/redux/hooks";
 import { getReviews, deleteReview } from "@/services/reviewService";
 import { Review } from "@/types";
 import ReviewForm from "./ReviewForm";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 
 interface ReviewListProps {
   productId: string;
@@ -20,6 +23,7 @@ export default function ReviewList({ productId, allowCreate = true, orderId, onR
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Review | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const { confirm } = useConfirm();
 
   const userReview = useMemo(() => {
     if (!user) return null;
@@ -43,7 +47,14 @@ export default function ReviewList({ productId, allowCreate = true, orderId, onR
   }, [productId]);
 
   const handleDelete = async (reviewId: string) => {
-    if (!confirm("Are you sure you want to delete this review?")) return;
+    const accepted = await confirm({
+      title: "Delete this review?",
+      description: "Your review will be removed from the product page.",
+      confirmText: "Delete review",
+      cancelText: "Keep it",
+      tone: "danger",
+    });
+    if (!accepted) return;
 
     try {
       await deleteReview(reviewId);

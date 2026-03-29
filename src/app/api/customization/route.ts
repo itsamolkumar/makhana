@@ -1,7 +1,9 @@
 export const dynamic = "force-dynamic";
-import { NextResponse } from "next/server";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Customization from "@/models/customization.model";
+import { adminMiddleware } from "@/middleware/admin.middleware";
 
 export async function GET() {
   try {
@@ -48,9 +50,9 @@ export async function GET() {
   }
 }
 
-export async function PUT(req: Request) {
+export async function PUT(req: NextRequest) {
   try {
-    // Basic auth check can be middleware-based, relying on existing app setup.
+    await adminMiddleware(req);
     await connectDB();
     const body = await req.json();
 

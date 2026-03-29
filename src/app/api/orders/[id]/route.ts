@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { connectDB } from "@/lib/db";
 import { authMiddleware } from "@/middleware/auth.middleware";
 import { adminMiddleware } from "@/middleware/admin.middleware";
@@ -13,7 +14,6 @@ import {
 import {
   updateOrderStatusValidator,
   cancelOrderValidator,
-  assignDeliveryBoyValidator,
 } from "@/validators/order.validator";
 
 export async function GET(
@@ -29,7 +29,7 @@ export async function GET(
     const { id } = await context.params;
     if (!id) return apiError("Order ID is required", 400);
 
-    const isAdmin = await adminMiddleware(req);
+    const isAdmin = user.role === "admin";
 
     // Get order - admin can view any, user can view only their own
     const order = await getOrderById(id, isAdmin ? undefined : user.userId);

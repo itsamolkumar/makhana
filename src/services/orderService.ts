@@ -1,10 +1,13 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import Order, { IOrder, IOrderItem, IOrderStatusTimeline } from "@/models/order.model";
+import OrderSequence from "@/models/order-sequence.model";
 import Product from "@/models/product.model";
 import Cart from "@/models/cart.model";
 import Coupon from "@/models/coupon.model";
 import User from "@/models/user.model";
 import mongoose from "mongoose";
-import { GST_RATE } from "@/lib/pricing";
+import { computeOrderTotals, GST_RATE } from "@/lib/pricing";
+import { getStorePricingSettings } from "@/services/storeSettings.service";
 
 export { GST_RATE };
 
@@ -12,15 +15,20 @@ export { GST_RATE };
  * Generate unique order number
  * Format: ORD-20260319-000001
  */
-export const generateOrderNumber = async (): Promise<string> => {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const count = await Order.countDocuments({
-    createdAt: {
-      $gte: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()),
-      $lt: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1),
-    },
-  });
-  return `ORD-${date}-${String(count + 1).padStart(6, "0")}`;
+export const generateOrderNumber = async (session?: mongoose.ClientSession): Promise<string> => {
+  const dateKey = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const sequence = await OrderSequence.findOneAndUpdate(
+    { dateKey },
+    { $inc: { currentValue: 1 } },
+    {
+      new: true,
+      upsert: true,
+      setDefaultsOnInsert: true,
+      session,
+    }
+  );
+
+  return `ORD-${dateKey}-${String(sequence.currentValue).padStart(6, "0")}`;
 };
 
 /**
@@ -151,13 +159,15 @@ export const createOrder = async (params: CreateOrderParams): Promise<{ success:
       couponRecord = couponResult.coupon;
     }
 
-    const taxableAfterCoupon = Math.max(0, subtotal - couponDiscount);
-    const tax = calculateTax(taxableAfterCoupon, GST_RATE);
-    const shippingPrice = 0;
-    const totalPrice = parseFloat((taxableAfterCoupon + tax + shippingPrice).toFixed(2));
+    const pricingSettings = await getStorePricingSettings();
+    const totals = computeOrderTotals(subtotal, couponDiscount, pricingSettings);
+    const tax = totals.gst;
+    const shippingPrice = totals.deliveryCharge;
+    const serviceCharge = totals.serviceCharge;
+    const totalPrice = totals.total;
 
     // Generate order number
-    const orderNumber = await generateOrderNumber();
+    const orderNumber = await generateOrderNumber(session);
 
     // Create order
     const order = await Order.create(
@@ -179,6 +189,8 @@ export const createOrder = async (params: CreateOrderParams): Promise<{ success:
           ],
           subtotal,
           tax,
+          gstRate: totals.gstRate,
+          serviceCharge,
           shippingPrice,
           couponCode: couponRecord?.code,
           couponDiscount,
@@ -385,6 +397,15 @@ export const getOrderStats = async (userId?: string): Promise<any> => {
         totalOrders: { $sum: 1 },
         totalRevenue: { $sum: "$totalPrice" },
         avgOrderValue: { $avg: "$totalPrice" },
+        processingOrders: {
+          $sum: {
+            $cond: [
+              { $in: ["$orderStatus", ["confirmed", "processing", "shipped", "out_for_delivery"]] },
+              1,
+              0,
+            ],
+          },
+        },
         deliveredOrders: {
           $sum: { $cond: [{ $eq: ["$orderStatus", "delivered"] }, 1, 0] },
         },
@@ -395,7 +416,14 @@ export const getOrderStats = async (userId?: string): Promise<any> => {
     },
   ]);
 
-  return stats[0] || { totalOrders: 0, totalRevenue: 0, avgOrderValue: 0 };
+  return stats[0] || {
+    totalOrders: 0,
+    totalRevenue: 0,
+    avgOrderValue: 0,
+    processingOrders: 0,
+    deliveredOrders: 0,
+    cancelledOrders: 0,
+  };
 };
 
 /**

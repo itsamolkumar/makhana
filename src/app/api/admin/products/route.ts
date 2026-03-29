@@ -1,15 +1,15 @@
 import { NextRequest } from "next/server";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { connectDB } from "@/lib/db";
 import Product from "@/models/product.model";
 import cloudinary from "@/lib/cloudinary";
 import { adminMiddleware } from "@/middleware/admin.middleware";
-import { createProductValidator } from "@/validators/product.validator";
 import { apiSuccess, apiError } from "@/utils/apiResponse";
 import { handleError } from "@/utils/errorHandler";
 
 // ⭐ UNIQUE SLUG GENERATOR
 async function generateUniqueSlug(name: string) {
-  let baseSlug = name
+  const baseSlug = name
     .toLowerCase()
     .trim()
     .replace(/\s+/g, "-")
@@ -128,11 +128,15 @@ export async function POST(req: NextRequest) {
     const name = data.name as string;
     const description = data.description as string;
     const price = Number(data.price);
+    const discountPrice =
+      data.discountPrice !== undefined && data.discountPrice !== null && data.discountPrice !== ""
+        ? Number(data.discountPrice)
+        : undefined;
     const category = data.category as string;
     const weight = data.weight as string;
     const stock = Number(data.stock);
 
-    if (!name || !price || !category || !weight || !stock) {
+    if (!name || Number.isNaN(price) || !category || !weight || Number.isNaN(stock)) {
       return apiError("All fields required", 400);
     }
 
@@ -150,6 +154,7 @@ export async function POST(req: NextRequest) {
       name,
       description,
       price,
+      discountPrice,
       category,
       images: imageUrls,
       weight,

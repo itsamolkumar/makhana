@@ -10,6 +10,7 @@ import {
   Settings,
   Users,
   ExternalLink,
+  ReceiptIndianRupee,
 } from "lucide-react";
 
 const menu = [
@@ -18,6 +19,7 @@ const menu = [
   { name: "Products", icon: Package, href: "/admin/products" },
   { name: "Coupons", icon: TicketPercent, href: "/admin/coupons" },
   { name: "Orders", icon: ShoppingCart, href: "/admin/orders" },
+  { name: "Pricing & Charges", icon: ReceiptIndianRupee, href: "/admin/pricing" },
   { name: "Customize Site", icon: Settings, href: "/admin/customize" },
 ];
 

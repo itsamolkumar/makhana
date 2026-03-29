@@ -3,7 +3,6 @@ import { connectDB } from "@/lib/db";
 import { adminMiddleware } from "@/middleware/admin.middleware";
 import { apiSuccess, apiError } from "@/utils/apiResponse";
 import { handleError } from "@/utils/errorHandler";
-import mongoose from "mongoose";
 
 // Models
 import User from "@/models/user.model";
@@ -30,6 +29,9 @@ export async function GET(req: NextRequest) {
     const orders = await Order.find({ orderStatus: { $ne: "cancelled" } });
     
     let totalRevenue = 0;
+    let deliveredOrders = 0;
+    let processingOrders = 0;
+    let cancelledOrders = 0;
     
     // Monthly sales array formatted for recharts
     const currentYear = new Date().getFullYear();
@@ -42,6 +44,14 @@ export async function GET(req: NextRequest) {
 
     orders.forEach(order => {
       totalRevenue += order.totalPrice;
+
+      if (order.orderStatus === "delivered") {
+        deliveredOrders += 1;
+      } else if (["confirmed", "processing", "shipped", "out_for_delivery"].includes(order.orderStatus)) {
+        processingOrders += 1;
+      } else if (order.orderStatus === "cancelled") {
+        cancelledOrders += 1;
+      }
       
       const orderDate = new Date(order.createdAt);
       if (orderDate.getFullYear() === currentYear) {
@@ -68,6 +78,9 @@ export async function GET(req: NextRequest) {
         coupons: totalCoupons,
       },
       revenue: totalRevenue,
+      deliveredOrders,
+      processingOrders,
+      cancelledOrders,
       salesData: filteredSalesData
     }, "Admin stats retrieved successfully");
 

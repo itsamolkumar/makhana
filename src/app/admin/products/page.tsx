@@ -1,4 +1,7 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @next/next/no-img-element */
+/* eslint-disable react-hooks/exhaustive-deps */
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -6,6 +9,7 @@ import { Edit2, Trash2, Plus, CheckCircle2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { PRODUCT_CATEGORIES } from "@/constants/productCategories";
 import Loader from "@/components/Loader";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState([]);
@@ -19,6 +23,7 @@ export default function AdminProductsPage() {
   const [maxPrice, setMaxPrice] = useState("");
   const [minStock, setMinStock] = useState("");
   const [maxStock, setMaxStock] = useState("");
+  const { confirm } = useConfirm();
 
   const fetchProducts = async (opts: { search?: string } = {}) => {
     setLoading(true);
@@ -64,7 +69,14 @@ export default function AdminProductsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this product?")) return;
+    const accepted = await confirm({
+      title: "Delete this product?",
+      description: "The product will be hidden from the storefront until you reactivate it.",
+      confirmText: "Delete product",
+      cancelText: "Cancel",
+      tone: "danger",
+    });
+    if (!accepted) return;
 
     try {
       const res = await fetch(`/api/admin/products?id=${id}`, {

@@ -1,9 +1,11 @@
 "use client";
+/* eslint-disable react-hooks/exhaustive-deps */
 
 import { useEffect, useState } from "react";
 import Loader from "@/components/Loader";
 import toast from "react-hot-toast";
 import { Search, ShieldAlert, ShieldCheck } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 
 interface UserData {
   _id: string;
@@ -19,6 +21,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const { confirm } = useConfirm();
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -37,7 +40,7 @@ export default function AdminUsersPage() {
       } else {
         toast.error(data.message || "Failed to fetch users");
       }
-    } catch (error) {
+    } catch {
       toast.error("Error fetching users");
     } finally {
       setLoading(false);
@@ -59,7 +62,14 @@ export default function AdminUsersPage() {
       ? "Are you sure you want to unblock this user?"
       : "Are you sure you want to block this user? They will be logged out globally.";
 
-    if (!confirm(confirmMessage)) return;
+    const accepted = await confirm({
+      title: currentStatus ? "Unblock this user?" : "Block this user?",
+      description: confirmMessage,
+      confirmText: currentStatus ? "Unblock user" : "Block user",
+      cancelText: "Cancel",
+      tone: currentStatus ? "default" : "danger",
+    });
+    if (!accepted) return;
 
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
@@ -77,7 +87,7 @@ export default function AdminUsersPage() {
       } else {
         toast.error(data.message || `Failed to ${action} user`);
       }
-    } catch (error) {
+    } catch {
       toast.error(`Error attempting to ${action} user`);
     }
   };

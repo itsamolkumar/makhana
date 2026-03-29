@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { IOrder } from "@/models/order.model";
 
 /**
@@ -120,6 +121,7 @@ export const getOrderBreakdown = (order: IOrder) => {
   return {
     subtotal: formatCurrencyDecimal(order.subtotal),
     tax: formatCurrencyDecimal(order.tax),
+    serviceCharge: formatCurrencyDecimal(order.serviceCharge || 0),
     shipping: formatCurrencyDecimal(order.shippingPrice),
     couponDiscount: formatCurrencyDecimal(order.couponDiscount),
     discount: formatCurrencyDecimal(order.discount || 0),

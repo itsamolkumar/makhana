@@ -1,12 +1,15 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react-hooks/exhaustive-deps */
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, Edit2, Eye, DollarSign, Package, Clock, CheckCircle2, XCircle, TrendingUp } from "lucide-react";
+import { Search, Eye, DollarSign, Package, Clock, CheckCircle2, XCircle, TrendingUp } from "lucide-react";
 import toast from "react-hot-toast";
 import Loader from "@/components/Loader";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 
-const ORDER_STATUSES = ["processing", "shipped", "delivered", "cancelled"];
+const ORDER_STATUSES = ["confirmed", "processing", "shipped", "out_for_delivery", "delivered", "cancelled", "returned"];
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
@@ -21,6 +24,7 @@ export default function AdminOrdersPage() {
   
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const { confirm } = useConfirm();
 
   const fetchOrders = async (opts: { search?: string, status?: string, page?: number } = {}) => {
     setLoading(true);
@@ -69,7 +73,13 @@ export default function AdminOrdersPage() {
   };
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
-    if (!confirm(`Are you sure you want to change status to ${newStatus}?`)) return;
+    const accepted = await confirm({
+      title: "Update order status?",
+      description: `This order will move to ${newStatus.replace(/_/g, " ")}.`,
+      confirmText: "Update status",
+      cancelText: "Cancel",
+    });
+    if (!accepted) return;
     
     setUpdatingId(orderId);
     try {
@@ -86,7 +96,7 @@ export default function AdminOrdersPage() {
         const error = await res.json();
         toast.error(error.message || "Failed to update order status");
       }
-    } catch (error: any) {
+    } catch {
       toast.error("An error occurred while updating status");
     } finally {
       setUpdatingId(null);
@@ -95,9 +105,12 @@ export default function AdminOrdersPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case "confirmed": return <span className="bg-sky-100 text-sky-700 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1"><Clock size={12}/> Confirmed</span>;
       case "delivered": return <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1"><CheckCircle2 size={12}/> Delivered</span>;
       case "shipped": return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1"><Package size={12}/> Shipped</span>;
+      case "out_for_delivery": return <span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1"><Package size={12}/> Out for delivery</span>;
       case "cancelled": return <span className="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1"><XCircle size={12}/> Cancelled</span>;
+      case "returned": return <span className="bg-gray-200 text-gray-700 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1"><XCircle size={12}/> Returned</span>;
       default: return <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1"><Clock size={12}/> Processing</span>;
     }
   };

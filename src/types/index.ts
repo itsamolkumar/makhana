@@ -88,6 +88,22 @@ export interface ShippingAddress {
   landmark?: string;
 }
 
+export type OrderStatus =
+  | "confirmed"
+  | "processing"
+  | "shipped"
+  | "out_for_delivery"
+  | "delivered"
+  | "cancelled"
+  | "returned";
+
+export interface OrderStatusTimelineItem {
+  status: OrderStatus;
+  timestamp: string;
+  description?: string;
+  location?: string;
+}
+
 export interface Order {
   _id: string;
   user: string;
@@ -95,11 +111,16 @@ export interface Order {
   shippingAddress: ShippingAddress;
   paymentMethod: string;
   paymentStatus: string;
-  orderStatus: string;
+  orderStatus: OrderStatus;
+  subtotal?: number;
+  tax?: number;
+  gstRate?: number;
+  serviceCharge?: number;
   totalPrice: number;
   shippingPrice?: number;
   couponCode?: string;
   couponDiscount?: number;
+  statusTimeline?: OrderStatusTimelineItem[];
   createdAt?: string;
   updatedAt?: string;
 }

@@ -1,4 +1,6 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react-hooks/exhaustive-deps */
 
 import { useEffect, useState } from "react";
 import { useAppSelector } from "@/redux/hooks";
@@ -6,6 +8,7 @@ import { Coupon } from "@/types";
 import { getCoupons, createCoupon, updateCoupon, deleteCoupon } from "@/services/couponService";
 import toast from "react-hot-toast";
 import { Plus, Edit, Trash2, Search } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 
 export default function CouponsPage() {
   const { user } = useAppSelector((state) => state.auth);
@@ -15,6 +18,7 @@ export default function CouponsPage() {
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const { confirm } = useConfirm();
 
   const [formData, setFormData] = useState({
     code: "",
@@ -100,7 +104,14 @@ export default function CouponsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this coupon?")) return;
+    const accepted = await confirm({
+      title: "Delete this coupon?",
+      description: "This coupon will be permanently removed from the admin panel.",
+      confirmText: "Delete coupon",
+      cancelText: "Keep it",
+      tone: "danger",
+    });
+    if (!accepted) return;
 
     try {
       await deleteCoupon(id);

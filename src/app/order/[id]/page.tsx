@@ -1,14 +1,18 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @next/next/no-img-element */
+/* eslint-disable react-hooks/exhaustive-deps */
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { GST_RATE } from "@/lib/pricing";
+import { CheckCircle2, Clock3, PackageCheck, RefreshCw, Truck, XCircle } from "lucide-react";
 
 export default function OrderPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const orderId = (params as any)?.id;
 
   const [order, setOrder] = useState<any>(null);
@@ -16,6 +20,9 @@ export default function OrderPage() {
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [updatingMethod, setUpdatingMethod] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const paymentFlowState = searchParams.get("payment");
 
   const isOnlineMethod = (m: string) => m === "razorpay" || m === "upi" || m === "netbanking";
 
@@ -25,6 +32,39 @@ export default function OrderPage() {
   };
 
   const [paymentChoice, setPaymentChoice] = useState<"razorpay" | "cod">("razorpay");
+
+  const fetchOrder = async (showLoader = false) => {
+    if (!orderId) return;
+
+    if (showLoader) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) {
+        const nextOrder = data.data.order;
+        setOrder(nextOrder);
+        setPaymentChoice(syncPaymentChoice(nextOrder));
+        setError(null);
+        setLastSyncedAt(new Date().toISOString());
+      } else {
+        setError(data.message || "Order not found");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load order");
+    } finally {
+      if (showLoader) {
+        setLoading(false);
+      } else {
+        setRefreshing(false);
+      }
+    }
+  };
 
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
@@ -85,8 +125,17 @@ export default function OrderPage() {
              });
              
              if (verifyRes.ok) {
+               setOrder((prev: any) =>
+                 prev
+                   ? {
+                       ...prev,
+                       paymentStatus: "paid",
+                       paymentId: response.razorpay_payment_id,
+                     }
+                   : prev
+               );
                toast.success("Payment successful!", { id: "verify-toast" });
-               router.push(`/order/confirmed/${order._id}?paid=1`);
+               router.replace(`/order/${order._id}?payment=success`);
              } else {
                const errorData = await verifyRes.json();
                toast.error(errorData?.message || "Payment verification failed", { id: "verify-toast" });
@@ -95,14 +144,15 @@ export default function OrderPage() {
                  headers: { "Content-Type": "application/json" },
                  body: JSON.stringify({ dbOrderId: order._id, error_description: "Signature mismatch" })
                });
+               setOrder((prev: any) => (prev ? { ...prev, paymentStatus: "failed" } : prev));
                setPaying(false);
-               router.push(`/payment/failed?orderId=${order._id}`);
+               router.replace(`/order/${order._id}?payment=failed`);
              }
           } catch (error) {
              console.error("Verification error", error);
              toast.error("An error occurred during verification", { id: "verify-toast" });
              setPaying(false);
-             router.push(`/payment/failed?orderId=${order._id}`);
+             router.replace(`/order/${order._id}?payment=failed`);
           }
         },
         prefill: {
@@ -115,13 +165,8 @@ export default function OrderPage() {
         modal: {
           ondismiss: async function() {
             setPaying(false);
-            toast.error("Payment cancelled.");
-            await fetch("/api/payment/fail", {
-               method: "POST",
-               headers: { "Content-Type": "application/json" },
-               body: JSON.stringify({ dbOrderId: order._id, error_description: "User closed modal" })
-            });
-            router.push(`/payment/failed?orderId=${order._id}`);
+            toast("Payment window closed. Your order is still pending.");
+            router.replace(`/order/${order._id}?payment=cancelled`);
           }
         }
       };
@@ -139,8 +184,9 @@ export default function OrderPage() {
                   razorpay_payment_id: response.error.metadata?.payment_id
                })
            });
+           setOrder((prev: any) => (prev ? { ...prev, paymentStatus: "failed" } : prev));
            paymentObject.close();
-           router.push(`/payment/failed?orderId=${order._id}`);
+           router.replace(`/order/${order._id}?payment=failed`);
       });
       paymentObject.open();
 
@@ -184,29 +230,19 @@ export default function OrderPage() {
 
   useEffect(() => {
     if (!orderId) return;
-
-    const fetchOrder = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/orders/${orderId}`);
-        const data = await res.json();
-        if (res.ok) {
-          const o = data.data.order;
-          setOrder(o);
-          setPaymentChoice(syncPaymentChoice(o));
-        } else {
-          setError(data.message || "Order not found");
-        }
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load order");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchOrder();
+    void fetchOrder(true);
   }, [orderId]);
+
+  useEffect(() => {
+    if (!order?._id) return;
+    if (["delivered", "cancelled", "returned"].includes(order.orderStatus)) return;
+
+    const intervalId = window.setInterval(() => {
+      void fetchOrder(false);
+    }, 15000);
+
+    return () => window.clearInterval(intervalId);
+  }, [order?._id, order?.orderStatus]);
 
   if (loading) {
     return (
@@ -240,7 +276,7 @@ export default function OrderPage() {
       return <span className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded-full">Delivered</span>;
     }
     if (order.orderStatus === "shipped") {
-      return <span className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-full">Shipped</span>;
+      return <span className="px-3 py-1 text-xs rounded-full bg-[var(--color-accent)]/15 text-[var(--heading-color)]">Shipped</span>;
     }
     if (order.orderStatus === "cancelled") {
       return <span className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded-full">Cancelled</span>;
@@ -251,6 +287,112 @@ export default function OrderPage() {
   const subtotalVal = typeof order.subtotal === "number" ? order.subtotal : 0;
   const taxVal = typeof order.tax === "number" ? order.tax : 0;
   const couponDisc = typeof order.couponDiscount === "number" ? order.couponDiscount : 0;
+  const gstRate = typeof order.gstRate === "number" ? order.gstRate : 0.18;
+  const serviceChargeVal = typeof order.serviceCharge === "number" ? order.serviceCharge : 0;
+  const deliveryChargeVal = typeof order.shippingPrice === "number" ? order.shippingPrice : 0;
+  const terminalOrder = ["delivered", "cancelled", "returned"].includes(order.orderStatus || "");
+  const timeline = Array.isArray(order.statusTimeline) ? order.statusTimeline : [];
+  const sortedTimeline = [...timeline].sort(
+    (a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+  const statusMeta: Record<string, { label: string; detail: string; icon: typeof Clock3; chip: string }> = {
+    confirmed: {
+      label: "Order confirmed",
+      detail: "We received your order and started preparing it.",
+      icon: CheckCircle2,
+      chip: "border-[#d7c19a] bg-[#f7efe1] text-[var(--color-primary)]",
+    },
+    processing: {
+      label: "Preparing your items",
+      detail: "Your order is being packed and checked.",
+      icon: PackageCheck,
+      chip: "border-[#d7c19a] bg-[#fbf1df] text-[#8a6935]",
+    },
+    shipped: {
+      label: "Order shipped",
+      detail: "Your package is on the way.",
+      icon: Truck,
+      chip: "border-[#cdd9cf] bg-[#eef4ef] text-[var(--color-primary)]",
+    },
+    out_for_delivery: {
+      label: "Out for delivery",
+      detail: "The delivery partner should reach you soon.",
+      icon: Truck,
+      chip: "border-[#c7d4cc] bg-[#e8f0ea] text-[var(--color-primary)]",
+    },
+    delivered: {
+      label: "Delivered",
+      detail: "Your order has been delivered successfully.",
+      icon: CheckCircle2,
+      chip: "border-[#cdd9cf] bg-[#edf4ee] text-[var(--color-primary)]",
+    },
+    cancelled: {
+      label: "Order cancelled",
+      detail: "This order was cancelled before completion.",
+      icon: XCircle,
+      chip: "border-[#e6c9c1] bg-[#fbefec] text-[#8b4b3e]",
+    },
+    returned: {
+      label: "Order returned",
+      detail: "This order has been marked as returned.",
+      icon: XCircle,
+      chip: "border-[#ddd4c8] bg-[#f4efe8] text-[var(--heading-color)]",
+    },
+  };
+  const activeStatusMeta = statusMeta[order.orderStatus] || statusMeta.confirmed;
+  const ActiveStatusIcon = activeStatusMeta.icon;
+  const trackingSteps = ["confirmed", "processing", "shipped", "out_for_delivery", "delivered"];
+  const activeStepIndex = trackingSteps.indexOf(order.orderStatus);
+  const progressPercent = activeStepIndex >= 0 ? ((activeStepIndex + 1) / trackingSteps.length) * 100 : 0;
+  const showProgressRail = !["cancelled", "returned"].includes(order.orderStatus);
+  const estimatedDeliveryText = order.estimatedDelivery
+    ? new Date(order.estimatedDelivery).toLocaleDateString(undefined, { dateStyle: "medium" })
+    : null;
+  const paymentBanner = (() => {
+    if (paymentFlowState === "success") {
+      return {
+        tone: "success",
+        title: "Payment completed",
+        description: "Your online payment was verified successfully. We have started processing your order.",
+      };
+    }
+    if (paymentFlowState === "failed") {
+      return {
+        tone: "danger",
+        title: "Payment failed",
+        description: "Your order is still saved. Retry online payment below or switch to Cash on Delivery.",
+      };
+    }
+    if (paymentFlowState === "cancelled") {
+      return {
+        tone: "warning",
+        title: "Payment not completed",
+        description: "You closed the payment window before finishing. The order is still active and waiting for your decision.",
+      };
+    }
+    if (paymentFlowState === "setup_failed") {
+      return {
+        tone: "warning",
+        title: "Payment setup could not start",
+        description: "Your order was created, but the payment session could not be opened. You can retry or switch to COD below.",
+      };
+    }
+    if (paymentFlowState === "cod") {
+      return {
+        tone: "info",
+        title: "Order placed with COD",
+        description: "Your order is confirmed for Cash on Delivery. If you prefer, you can still switch to online payment before dispatch.",
+      };
+    }
+    if (order.paymentStatus === "failed") {
+      return {
+        tone: "danger",
+        title: "Payment still pending",
+        description: "Your last online payment attempt did not complete. Retry below or switch to COD.",
+      };
+    }
+    return null;
+  })();
 
   return (
     <div className="min-h-screen bg-[#faf9f6] px-3 py-8 sm:px-4 sm:py-12">
@@ -281,6 +423,251 @@ export default function OrderPage() {
 
         <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
           <div className="order-2 space-y-4 sm:space-y-6 lg:order-1 lg:col-span-2">
+            {paymentBanner && (
+              <div
+                className={`rounded-2xl border p-4 sm:p-5 ${
+                  paymentBanner.tone === "success"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+                    : paymentBanner.tone === "danger"
+                      ? "border-red-200 bg-red-50 text-red-950"
+                      : paymentBanner.tone === "warning"
+                        ? "border-amber-200 bg-amber-50 text-amber-950"
+                      : "border-[#d7c19a] bg-[#f7efe1] text-[var(--heading-color)]"
+                }`}
+              >
+                <p className="font-semibold">{paymentBanner.title}</p>
+                <p className="mt-1 text-sm opacity-90">{paymentBanner.description}</p>
+              </div>
+            )}
+
+            <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
+              <div className="border-b border-[#e5d8c4] bg-[linear-gradient(135deg,#f8f1e6_0%,#f4eadc_48%,#efe2cf_100%)] p-4 text-[var(--heading-color)] sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#dcc7a0] bg-white/80 text-[#8a6935] shadow-[0_10px_30px_rgba(200,169,110,0.18)]">
+                      <ActiveStatusIcon className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#9c8560]">Order tracking</p>
+                      <p className="mt-1 text-lg font-semibold leading-tight sm:text-2xl">{activeStatusMeta.label}</p>
+                      <p className="mt-1 text-sm text-[var(--color-text)]/80">{activeStatusMeta.detail}</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-start sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => void fetchOrder(false)}
+                      disabled={refreshing}
+                      className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#d9c7aa] bg-white px-3 py-2 text-xs font-medium text-[var(--heading-color)] shadow-sm transition hover:bg-[#fbf5ec] disabled:opacity-60"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-[#e4d7c3] bg-white/85 px-4 py-3 shadow-sm">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-[#9c8560]">Payment</p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--heading-color)]">
+                      {order.paymentStatus === "paid" ? "Paid online" : paymentChoice === "cod" ? "Cash on delivery" : "Awaiting payment"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-[#e4d7c3] bg-white/85 px-4 py-3 shadow-sm">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-[#9c8560]">Estimated delivery</p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--heading-color)]">{estimatedDeliveryText || "Updating soon"}</p>
+                  </div>
+                  <div className="rounded-2xl border border-[#e4d7c3] bg-white/85 px-4 py-3 shadow-sm">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-[#9c8560]">Live sync</p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--heading-color)]">
+                      {lastSyncedAt
+                        ? new Date(lastSyncedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+                        : "Enabled"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 sm:p-6">
+                {showProgressRail ? (
+                  <div className="rounded-3xl border border-slate-100 bg-[#f7fbff] p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Shipment progress</p>
+                        <p className="mt-1 text-xs text-slate-500">Follow each milestone like a marketplace order tracker.</p>
+                      </div>
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
+                        {Math.max(progressPercent, 20).toFixed(0)}% complete
+                      </span>
+                    </div>
+
+                    <div className="mt-5 space-y-3 sm:hidden">
+                      {trackingSteps.map((step, index) => {
+                        const meta = statusMeta[step];
+                        const completed = activeStepIndex >= index;
+                        const current = order.orderStatus === step;
+                        const StepIcon = meta.icon;
+
+                        return (
+                          <div key={step} className="flex gap-3">
+                            <div className="flex flex-col items-center">
+                              <div
+                                className={`flex h-10 w-10 items-center justify-center rounded-full border-4 bg-white ${
+                                  completed
+                                    ? "border-emerald-400 text-emerald-600"
+                                    : "border-slate-200 text-slate-400"
+                                }`}
+                              >
+                                <StepIcon className="h-4 w-4" />
+                              </div>
+                              {index !== trackingSteps.length - 1 && (
+                                <div className={`mt-1 h-10 w-1 rounded-full ${completed ? "bg-emerald-300" : "bg-slate-200"}`} />
+                              )}
+                            </div>
+                            <div
+                              className={`min-w-0 flex-1 rounded-2xl px-3 py-3 ${
+                                current
+                                  ? "bg-sky-50 text-sky-900 ring-1 ring-sky-200"
+                                  : completed
+                                    ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200"
+                                    : "bg-white text-slate-500 ring-1 ring-slate-200"
+                              }`}
+                            >
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.12em]">
+                                Step {index + 1}
+                              </p>
+                              <p className="mt-1 text-sm font-semibold leading-snug">{meta.label}</p>
+                              <p className="mt-1 text-xs leading-5 opacity-80">{meta.detail}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="relative mt-5 hidden overflow-x-auto pb-2 sm:block">
+                      <div className="relative min-w-[560px]">
+                        <div className="absolute left-6 right-6 top-5 h-1 rounded-full bg-slate-200" />
+                        <div
+                          className="absolute left-6 top-5 h-1 rounded-full bg-gradient-to-r from-emerald-400 to-sky-500"
+                          style={{ width: `calc(${Math.max(progressPercent, 20)}% - 3rem)` }}
+                        />
+
+                        <div className="relative grid grid-cols-5 gap-3">
+                          {trackingSteps.map((step, index) => {
+                            const meta = statusMeta[step];
+                            const completed = activeStepIndex >= index;
+                            const current = order.orderStatus === step;
+                            const StepIcon = meta.icon;
+
+                            return (
+                              <div key={step} className="flex flex-col items-center text-center">
+                                <div
+                                  className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-4 bg-white ${
+                                    completed
+                                      ? "border-emerald-400 text-emerald-600"
+                                      : "border-slate-200 text-slate-400"
+                                  }`}
+                                >
+                                  <StepIcon className="h-4 w-4" />
+                                </div>
+                                <div
+                                  className={`mt-3 w-full rounded-2xl px-2 py-3 ${
+                                    current
+                                      ? "bg-sky-50 text-sky-900 ring-1 ring-sky-200"
+                                      : completed
+                                        ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200"
+                                        : "bg-white text-slate-500 ring-1 ring-slate-200"
+                                  }`}
+                                >
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em]">
+                                    Step {index + 1}
+                                  </p>
+                                  <p className="mt-1 text-sm font-semibold leading-snug">{meta.label}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-3xl border border-red-100 bg-red-50 p-4 text-sm text-red-900">
+                    <p className="font-semibold">{activeStatusMeta.label}</p>
+                    <p className="mt-1 text-red-800/90">{activeStatusMeta.detail}</p>
+                  </div>
+                )}
+
+                <div className="mt-5 rounded-3xl border border-slate-100 bg-[#fbfcfe] p-4 sm:p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">Latest updates</p>
+                      <p className="mt-1 text-xs text-slate-500">Every admin status change appears here automatically.</p>
+                    </div>
+                    {!terminalOrder && (
+                      <div className="flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-[11px] font-medium text-slate-600 shadow-sm ring-1 ring-slate-200">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        Auto refresh 15s
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {sortedTimeline.length > 0 ? (
+                      sortedTimeline.map((entry: any, index: number) => {
+                        const meta = statusMeta[entry.status] || statusMeta.confirmed;
+                        const EntryIcon = meta.icon;
+                        const isLatest = index === 0;
+
+                        return (
+                          <div
+                            key={`${entry.status}-${entry.timestamp}-${index}`}
+                            className={`relative overflow-hidden rounded-2xl border bg-white p-4 shadow-sm ${
+                              isLatest ? "border-sky-200 shadow-sky-100/70" : "border-slate-200"
+                            }`}
+                          >
+                            <div className="flex gap-3">
+                              <div className="relative flex flex-col items-center">
+                                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border ${meta.chip} sm:h-10 sm:w-10`}>
+                                  <EntryIcon className="h-4 w-4" />
+                                </div>
+                                {index !== sortedTimeline.length - 1 && <div className="mt-2 h-full w-px bg-slate-200" />}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+                                  <p className="text-sm font-semibold text-slate-900">{meta.label}</p>
+                                  {isLatest && (
+                                    <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                                      Latest
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="mt-1 text-xs font-medium text-slate-500">
+                                  {new Date(entry.timestamp).toLocaleString(undefined, {
+                                    dateStyle: "medium",
+                                    timeStyle: "short",
+                                  })}
+                                </p>
+                                {entry.description && <p className="mt-2 text-sm leading-6 text-slate-700">{entry.description}</p>}
+                                {entry.location && (
+                                  <p className="mt-2 text-xs font-medium text-slate-500">Location: {entry.location}</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-5 text-sm text-slate-500">
+                        Tracking updates will start appearing here once the order moves to the next stage.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <h2 className="text-xl font-semibold mb-4">Shipping Address</h2>
               <p className="text-gray-700">
@@ -324,25 +711,29 @@ export default function OrderPage() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between text-gray-600">
                 <span>Subtotal</span>
-                <span className="font-medium text-gray-900">₹{subtotalVal.toFixed(2)}</span>
+                <span className="font-medium text-gray-900">Rs {subtotalVal.toFixed(2)}</span>
               </div>
               {order.couponCode && couponDisc > 0 && (
                 <div className="flex justify-between text-green-600">
                   <span>Coupon ({order.couponCode})</span>
-                  <span>−₹{couponDisc.toFixed(2)}</span>
+                  <span>-Rs {couponDisc.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-gray-600">
-                <span>GST ({GST_RATE * 100}%)</span>
-                <span className="font-medium text-gray-900">₹{taxVal.toFixed(2)}</span>
+                <span>GST ({(gstRate * 100).toFixed(0)}%)</span>
+                <span className="font-medium text-gray-900">Rs {taxVal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-gray-600">
-                <span>Delivery</span>
-                <span className="font-medium">Free</span>
+                <span>Service charge</span>
+                <span className="font-medium">Rs {serviceChargeVal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>Delivery charge</span>
+                <span className="font-medium">Rs {deliveryChargeVal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between border-t pt-3 text-base font-bold text-gray-900">
-                <span>Total (incl. GST)</span>
-                <span>₹{Number(order.totalPrice).toFixed(2)}</span>
+                <span>Total payable</span>
+                <span>Rs {Number(order.totalPrice).toFixed(2)}</span>
               </div>
             </div>
 
@@ -350,9 +741,8 @@ export default function OrderPage() {
               order.paymentStatus !== "paid" &&
               !["cancelled", "delivered", "returned"].includes(order.orderStatus || "") && (
                 <div className="mt-6 rounded-xl border border-emerald-100 bg-emerald-50/80 p-4 text-sm text-emerald-900">
-                  <p className="font-semibold">Pay securely online</p>
                   <p className="mt-1 text-emerald-800/90">
-                    Switch to online payment below — amount includes {GST_RATE * 100}% GST (same as your order total).
+                    Switch to online payment below. Your total already includes GST, service, and delivery charges.
                   </p>
                 </div>
               )}
@@ -403,14 +793,19 @@ export default function OrderPage() {
                   )}
 
                   {paymentChoice === "razorpay" && (
-                    <button
-                      type="button"
-                      onClick={handlePayNow}
-                      disabled={paying || updatingMethod}
-                      className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold hover:opacity-90 disabled:opacity-50 transition"
-                    >
-                      {paying ? "Opening payment…" : "Pay now (secure)"}
-                    </button>
+                    <div className="space-y-3">
+                      <button
+                        type="button"
+                        onClick={handlePayNow}
+                        disabled={paying || updatingMethod}
+                        className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold hover:opacity-90 disabled:opacity-50 transition"
+                      >
+                        {paying ? "Opening payment..." : "Pay now (secure)"}
+                      </button>
+                      <p className="text-xs text-gray-500">
+                        If you open the payment window and then change your mind, close it and switch back to COD here.
+                      </p>
+                    </div>
                   )}
 
                   {paymentChoice === "cod" && !updatingMethod && (
@@ -428,3 +823,4 @@ export default function OrderPage() {
     </div>
   );
 }
+

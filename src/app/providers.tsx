@@ -4,6 +4,7 @@ import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
 import { store, persistor } from "@/redux/store";
 import AuthInitializer from "@/components/auth/AuthInitializer";
+import { ConfirmProvider } from "@/components/ui/ConfirmProvider";
 
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { Toaster, ToastBar, toast } from "react-hot-toast";
@@ -15,6 +16,7 @@ export default function Providers({
 }) {
   return (
     <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!}>
+      <ConfirmProvider>
       <Provider store={store}>
         <PersistGate loading={null} persistor={persistor}>
           <AuthInitializer>{children}</AuthInitializer>
@@ -49,6 +51,7 @@ export default function Providers({
           </Toaster>
         </PersistGate>
       </Provider>
+      </ConfirmProvider>
     </GoogleOAuthProvider>
   );
 }

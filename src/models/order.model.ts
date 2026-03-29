@@ -24,7 +24,7 @@ export interface IShippingAddress {
 }
 
 export interface IOrderStatusTimeline {
-  status: "confirmed" | "processing" | "shipped" | "out_for_delivery" | "delivered" | "cancelled";
+  status: "confirmed" | "processing" | "shipped" | "out_for_delivery" | "delivered" | "cancelled" | "returned";
   timestamp: Date;
   description?: string;
   location?: string;
@@ -56,6 +56,10 @@ export interface IOrder {
   subtotal: number;
 
   tax: number;
+
+  gstRate?: number;
+
+  serviceCharge: number;
 
   shippingPrice: number;
 
@@ -194,7 +198,7 @@ const orderSchema = new Schema<IOrder>(
       {
         status: {
           type: String,
-          enum: ["confirmed", "processing", "shipped", "out_for_delivery", "delivered", "cancelled"]
+          enum: ["confirmed", "processing", "shipped", "out_for_delivery", "delivered", "cancelled", "returned"]
         },
         timestamp: {
           type: Date,
@@ -211,6 +215,16 @@ const orderSchema = new Schema<IOrder>(
     },
 
     tax: {
+      type: Number,
+      default: 0
+    },
+
+    gstRate: {
+      type: Number,
+      default: 0.18
+    },
+
+    serviceCharge: {
       type: Number,
       default: 0
     },

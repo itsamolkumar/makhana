@@ -1,4 +1,7 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @next/next/no-img-element */
+/* eslint-disable react-hooks/exhaustive-deps */
 
 import { useState, useEffect, useMemo } from "react";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
@@ -6,13 +9,18 @@ import { useRequireAuth } from "@/hooks/useRequireAuth";
 import AuthLoading from "@/components/AuthLoading";
 import MapAddressSelector from "@/components/MapAddressSelector";
 import { clearCart } from "@/redux/slices/cartSlice";
-import { updateUser } from "@/redux/slices/authSlice";
 import { motion } from "framer-motion";
-import { MapPin, Plus, Edit2, Trash2, CreditCard, Truck, CheckCircle } from "lucide-react";
+import { MapPin, Plus, Edit2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { computeOrderTotals, GST_RATE } from "@/lib/pricing";
+import {
+  DEFAULT_PRICING_SETTINGS,
+  computeOrderTotals,
+  normalizePricingSettings,
+  type PricingSettings,
+} from "@/lib/pricing";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 
 interface Address {
   _id?: string;
@@ -27,13 +35,18 @@ interface Address {
 }
 
 export default function CheckoutPage() {
-  const { items, subtotal, discount, total, appliedCoupon: cartCoupon } = useAppSelector((state) => state.cart);
+  const { items, subtotal, discount, appliedCoupon: cartCoupon } = useAppSelector((state) => state.cart);
   const { user } = useAppSelector((state) => state.auth);
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const { confirm } = useConfirm();
   const [payOrderId, setPayOrderId] = useState<string | null>(null);
   const [payOrder, setPayOrder] = useState<any>(null);
   const [payOrderLoading, setPayOrderLoading] = useState(false);
+  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+  const [pricingSettings, setPricingSettings] = useState<PricingSettings>(
+    DEFAULT_PRICING_SETTINGS
+  );
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -56,9 +69,9 @@ export default function CheckoutPage() {
   const [couponDiscount, setCouponDiscount] = useState(0);
 
   const effectiveDiscount = appliedCoupon ? couponDiscount : discount;
-  const { taxable, gst: gstAmount, total: totalDue } = useMemo(
-    () => computeOrderTotals(subtotal, effectiveDiscount),
-    [subtotal, effectiveDiscount]
+  const { taxable, gst: gstAmount, total: totalDue, serviceCharge, deliveryCharge } = useMemo(
+    () => computeOrderTotals(subtotal, effectiveDiscount, pricingSettings),
+    [subtotal, effectiveDiscount, pricingSettings]
   );
 
   // Address form state
@@ -90,11 +103,27 @@ export default function CheckoutPage() {
 
   // Redirect to cart if no items (skip when paying an existing order)
   useEffect(() => {
-    if (payOrderId) return;
+    const loadPricingSettings = async () => {
+      try {
+        const res = await fetch("/api/store-settings", { cache: "no-store" });
+        const data = await res.json();
+        if (res.ok && data.data?.settings) {
+          setPricingSettings(normalizePricingSettings(data.data.settings));
+        }
+      } catch {
+        // Checkout falls back to defaults if pricing config is unavailable.
+      }
+    };
+
+    void loadPricingSettings();
+  }, []);
+
+  useEffect(() => {
+    if (payOrderId || currentOrderId) return;
     if (items.length === 0 && isAuthorized && !placingOrder) {
       router.push("/cart");
     }
-  }, [items.length, isAuthorized, placingOrder, router, payOrderId]);
+  }, [items.length, isAuthorized, placingOrder, router, payOrderId, currentOrderId]);
 
   // Load existing order for "pay again" flow
   useEffect(() => {
@@ -261,7 +290,14 @@ export default function CheckoutPage() {
   };
 
   const handleDeleteAddress = async (addressId: string, index: number) => {
-    if (!confirm("Are you sure you want to delete this address?")) {
+    const accepted = await confirm({
+      title: "Delete this address?",
+      description: "This saved address will be removed from your account.",
+      confirmText: "Delete address",
+      cancelText: "Keep it",
+      tone: "danger",
+    });
+    if (!accepted) {
       return;
     }
 
@@ -325,7 +361,7 @@ export default function CheckoutPage() {
       } else {
         toast.error(data.message || "Invalid coupon code");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to apply coupon");
     } finally {
       setLoading(false);
@@ -347,6 +383,14 @@ export default function CheckoutPage() {
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
     });
+  };
+
+  const redirectToOrder = (orderId: string, paymentState?: string) => {
+    const params = new URLSearchParams();
+    if (paymentState) {
+      params.set("payment", paymentState);
+    }
+    router.replace(`/order/${orderId}${params.toString() ? `?${params.toString()}` : ""}`);
   };
 
   const handlePlaceOrder = async () => {
@@ -395,6 +439,7 @@ export default function CheckoutPage() {
       const createdOrder = responseData.data.order;
       const dbOrderId = createdOrder._id;
       const amountToCharge = Number(createdOrder.totalPrice);
+      setCurrentOrderId(dbOrderId);
 
       // Order created successfully, clear cart.
       dispatch(clearCart());
@@ -402,8 +447,8 @@ export default function CheckoutPage() {
       if (paymentMethod === "razorpay") {
         const isLoaded = await loadRazorpayScript();
         if (!isLoaded) {
-          toast.error("Razorpay SDK failed to load. You can pay later from your Orders page.");
-          router.push(`/payment/failed?orderId=${dbOrderId}`);
+          toast.error("Razorpay SDK failed to load. You can finish payment from the order page.");
+          redirectToOrder(dbOrderId, "setup_failed");
           setPlacingOrder(false);
           setLoading(false);
           return;
@@ -418,13 +463,8 @@ export default function CheckoutPage() {
         const orderDataResult = await createRes.json();
         
         if (!createRes.ok) {
-          toast.error(orderDataResult?.message || "Failed to initialize payment.");
-          await fetch("/api/payment/fail", {
-             method: "POST",
-             headers: { "Content-Type": "application/json" },
-             body: JSON.stringify({ dbOrderId, error_description: "Failed to initialize razorpay model" })
-          });
-          router.push(`/payment/failed?orderId=${dbOrderId}`);
+          toast.error(orderDataResult?.message || "Failed to initialize payment. You can retry from the order page.");
+          redirectToOrder(dbOrderId, "setup_failed");
           setPlacingOrder(false);
           setLoading(false);
           return;
@@ -456,7 +496,7 @@ export default function CheckoutPage() {
                
                if (verifyRes.ok) {
                  toast.success("Payment successful!", { id: "verify-toast" });
-                 router.push(`/order/confirmed/${dbOrderId}?paid=1`);
+                 redirectToOrder(dbOrderId, "success");
                } else {
                  const errorData = await verifyRes.json();
                  toast.error(errorData?.message || "Payment verification failed", { id: "verify-toast" });
@@ -465,12 +505,12 @@ export default function CheckoutPage() {
                    headers: { "Content-Type": "application/json" },
                    body: JSON.stringify({ dbOrderId, error_description: "Signature mismatch" })
                  });
-                 router.push(`/payment/failed?orderId=${dbOrderId}`);
+                 redirectToOrder(dbOrderId, "failed");
                }
             } catch (error) {
                console.error("Verification error", error);
                toast.error("An error occurred during verification", { id: "verify-toast" });
-               router.push(`/payment/failed?orderId=${dbOrderId}`);
+               redirectToOrder(dbOrderId, "failed");
             }
           },
           prefill: {
@@ -483,13 +523,8 @@ export default function CheckoutPage() {
           },
           modal: {
             ondismiss: async function() {
-              toast.error("Payment cancelled.");
-              await fetch("/api/payment/fail", {
-                 method: "POST",
-                 headers: { "Content-Type": "application/json" },
-                 body: JSON.stringify({ dbOrderId, error_description: "User closed modal" })
-              });
-              router.push(`/payment/failed?orderId=${dbOrderId}`);
+              toast("Payment window closed. Your order is still saved and awaiting payment.");
+              redirectToOrder(dbOrderId, "cancelled");
             }
           }
         };
@@ -506,7 +541,7 @@ export default function CheckoutPage() {
                     razorpay_payment_id: response.error.metadata?.payment_id
                  })
              });
-             router.push(`/payment/failed?orderId=${dbOrderId}`);
+             redirectToOrder(dbOrderId, "failed");
              paymentObject.close();
         });
         paymentObject.open();
@@ -515,7 +550,7 @@ export default function CheckoutPage() {
 
       } else {
         toast.success("Order placed successfully!");
-        router.push(`/order/confirmed/${dbOrderId}?method=cod`);
+        redirectToOrder(dbOrderId, "cod");
         setPlacingOrder(false);
         setLoading(false);
       }
@@ -533,7 +568,7 @@ export default function CheckoutPage() {
     try {
       const isLoaded = await loadRazorpayScript();
       if (!isLoaded) {
-        toast.error("Payment SDK failed to load.");
+        toast.error("Payment SDK failed to load. You can still manage this order from its order page.");
         return;
       }
       const dbOrderId = payOrder._id;
@@ -573,7 +608,7 @@ export default function CheckoutPage() {
             });
             if (verifyRes.ok) {
               toast.success("Payment successful!", { id: "verify-toast" });
-              router.push(`/order/confirmed/${dbOrderId}?paid=1`);
+              redirectToOrder(dbOrderId, "success");
             } else {
               toast.error("Verification failed", { id: "verify-toast" });
               await fetch("/api/payment/fail", {
@@ -581,10 +616,10 @@ export default function CheckoutPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ dbOrderId, error_description: "Verify failed" }),
               });
-              router.push(`/payment/failed?orderId=${dbOrderId}`);
+              redirectToOrder(dbOrderId, "failed");
             }
           } catch {
-            router.push(`/payment/failed?orderId=${dbOrderId}`);
+            redirectToOrder(dbOrderId, "failed");
           }
         },
         prefill: {
@@ -595,12 +630,8 @@ export default function CheckoutPage() {
         theme: { color: "#16a34a" },
         modal: {
           ondismiss: async function () {
-            await fetch("/api/payment/fail", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ dbOrderId, error_description: "User closed modal" }),
-            });
-            router.push(`/payment/failed?orderId=${dbOrderId}`);
+            toast("Payment window closed. Your order is still pending.");
+            redirectToOrder(dbOrderId, "cancelled");
           },
         },
       };
@@ -615,7 +646,7 @@ export default function CheckoutPage() {
             razorpay_payment_id: response.error?.metadata?.payment_id,
           }),
         });
-        router.push(`/payment/failed?orderId=${dbOrderId}`);
+        redirectToOrder(dbOrderId, "failed");
         paymentObject.close();
       });
       paymentObject.open();
@@ -684,6 +715,9 @@ export default function CheckoutPage() {
               {loading ? "Please wait…" : "Pay now"}
             </button>
             <div className="flex flex-col gap-2 text-center text-sm">
+              <Link href={`/order/${payOrder._id}`} className="text-[var(--color-primary)] hover:underline">
+                Open full order options
+              </Link>
               <Link href={`/order/${payOrder._id}`} className="text-[var(--color-primary)] hover:underline">
                 View order details
               </Link>
@@ -793,7 +827,7 @@ export default function CheckoutPage() {
                   <MapPin className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">No Saved Addresses found</h3>
                   <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                    You haven't added any delivery addresses yet. Please add a new delivery address to proceed with placing your order.
+                    You haven&apos;t added any delivery addresses yet. Please add a new delivery address to proceed with placing your order.
                   </p>
                 </div>
               )}
@@ -1027,45 +1061,49 @@ export default function CheckoutPage() {
                 </div>
               )}
             </div>
-
             <div className="space-y-3 mb-6">
               <div className="flex justify-between">
                 <span className="text-gray-600">Subtotal</span>
-                <span className="font-medium">₹{subtotal}</span>
+                <span className="font-medium">Rs {subtotal.toFixed(2)}</span>
               </div>
 
               {discount > 0 && !appliedCoupon && (
                 <div className="flex justify-between text-green-600">
                   <span>Cart discount</span>
-                  <span>-₹{discount}</span>
+                  <span>-Rs {discount.toFixed(2)}</span>
                 </div>
               )}
 
               {couponDiscount > 0 && (
                 <div className="flex justify-between text-green-600">
                   <span>Coupon discount</span>
-                  <span>-₹{couponDiscount}</span>
+                  <span>-Rs {couponDiscount.toFixed(2)}</span>
                 </div>
               )}
 
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Taxable amount</span>
-                <span className="font-medium">₹{taxable.toFixed(2)}</span>
+                <span className="font-medium">Rs {taxable.toFixed(2)}</span>
               </div>
 
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">GST ({GST_RATE * 100}% incl.)</span>
-                <span className="font-medium">₹{gstAmount.toFixed(2)}</span>
+                <span className="text-gray-600">GST ({(pricingSettings.gstRate * 100).toFixed(0)}%)</span>
+                <span className="font-medium">Rs {gstAmount.toFixed(2)}</span>
               </div>
 
               <div className="flex justify-between">
-                <span className="text-gray-600">Delivery</span>
-                <span className="font-medium">Free</span>
+                <span className="text-gray-600">Service charge</span>
+                <span className="font-medium">Rs {serviceCharge.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-gray-600">Delivery charge</span>
+                <span className="font-medium">Rs {deliveryCharge.toFixed(2)}</span>
               </div>
 
               <div className="flex justify-between text-lg font-bold pt-3 border-t">
                 <span>Total to pay</span>
-                <span>₹{totalDue.toFixed(2)}</span>
+                <span>Rs {totalDue.toFixed(2)}</span>
               </div>
             </div>
 
@@ -1127,3 +1165,4 @@ export default function CheckoutPage() {
     </div>
   );
 }
+

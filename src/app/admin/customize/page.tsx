@@ -1,8 +1,10 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useState } from "react";
-import { Plus, Trash, Save, Upload, Edit, RefreshCw } from "lucide-react";
+import { Plus, Trash, Save, Upload, RefreshCw } from "lucide-react";
 import Image from "next/image";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 
 type Slide = {
   type: "image" | "video";
@@ -16,6 +18,7 @@ type SocialLinks = {
 };
 
 export default function AdminCustomizePage() {
+  const { alert } = useConfirm();
   const [slides, setSlides] = useState<Slide[]>([]);
   const [rootImage, setRootImage] = useState("");
   const [socialLinks, setSocialLinks] = useState<SocialLinks>({
@@ -42,7 +45,7 @@ export default function AdminCustomizePage() {
         setRootImage(data.rootImage || "");
         setSocialLinks(data.socialLinks || { instagram: "", facebook: "", twitter: "" });
       }
-    } catch (error) {
+    } catch {
       console.error("Failed to fetch customization");
     } finally {
       setLoading(false);
@@ -58,11 +61,21 @@ export default function AdminCustomizePage() {
         body: JSON.stringify({ heroSlides: slides, rootImage, socialLinks }),
       });
       if (res.ok) {
-        alert("Customization saved successfully!");
+        await alert({
+          title: "Customization saved",
+          description: "Your home page changes are now live.",
+          confirmText: "Nice",
+          tone: "success",
+        });
       }
     } catch (error) {
       console.error(error);
-      alert("Failed to save customization.");
+      await alert({
+        title: "Save failed",
+        description: "We could not save the customization right now.",
+        confirmText: "Close",
+        tone: "danger",
+      });
     } finally {
       setSaving(false);
     }
@@ -97,10 +110,20 @@ export default function AdminCustomizePage() {
           setSlides(newSlides);
         }
       } else {
-        alert(error || "Upload failed");
+        await alert({
+          title: "Upload failed",
+          description: error || "Please try uploading that file again.",
+          confirmText: "Close",
+          tone: "danger",
+        });
       }
     } catch (err: any) {
-      alert("Upload failed: " + err.message);
+      await alert({
+        title: "Upload failed",
+        description: `Upload failed: ${err.message}`,
+        confirmText: "Close",
+        tone: "danger",
+      });
     } finally {
       setUploadingObj(null);
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getProducts, ProductsParams } from "@/services/productService";
 import { Product } from "@/types";
 import ProductCard from "@/components/shop/ProductCard";
@@ -14,52 +14,112 @@ const CATEGORIES = ["all", ...PRODUCT_CATEGORIES];
 export default function ShopPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Filter States
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [sort, setSort] = useState("-createdAt");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const requestSequenceRef = useRef(0);
 
-  const fetchProducts = async () => {
+  const renderFilters = (isMobile = false) => (
+    <>
+      <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+        <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+          <Search size={18} className="text-[var(--color-primary)]" />
+          Search
+        </h3>
+        <input
+          type="text"
+          placeholder="Find your snack..."
+          className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] bg-gray-50 focus:bg-white transition"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+        <h3 className="font-bold text-gray-900 mb-4 inline-flex items-center gap-2">
+          <PackageOpen size={18} className="text-[var(--color-primary)]" />
+          Categories
+        </h3>
+        <div className="flex flex-col gap-2">
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => {
+                setCategory(cat);
+                if (isMobile) {
+                  setShowMobileFilters(false);
+                }
+              }}
+              className={`text-left px-4 py-2.5 rounded-xl capitalize font-medium transition-all ${
+                category === cat
+                  ? "bg-[var(--color-primary)] text-white shadow-md shadow-[var(--color-primary)]/20"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-[var(--color-primary)]"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+
+  const fetchProducts = async (targetPage: number, targetSearch: string, targetCategory: string, targetSort: string) => {
+    const requestId = ++requestSequenceRef.current;
+
     try {
       setLoading(true);
       const params: ProductsParams = {
-        page,
+        page: targetPage,
         limit: 12,
-        sort
+        sort: targetSort
       };
-      
-      if (search) params.search = search;
-      if (category !== "all") params.category = category;
+
+      if (targetSearch) params.search = targetSearch;
+      if (targetCategory !== "all") params.category = targetCategory;
 
       const res = await getProducts(params);
-      
+
+      if (requestId !== requestSequenceRef.current) {
+        return;
+      }
+
       if (res.data?.data) {
         setProducts(res.data.data.products);
         setTotalPages(res.data.data.pages);
       }
     } catch (error) {
-      console.error("Failed to fetch products", error);
+      if (requestId === requestSequenceRef.current) {
+        console.error("Failed to fetch products", error);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestSequenceRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    // Debounce search slightly
     const timeoutId = setTimeout(() => {
-      setPage(1); // Reset page on new filters
-      fetchProducts();
+      setDebouncedSearch(search.trim());
     }, 500);
+
     return () => clearTimeout(timeoutId);
-  }, [search, category, sort]);
+  }, [search]);
 
   useEffect(() => {
-    fetchProducts();
-  }, [page]); // Fetch when page changes
+    setPage(1);
+  }, [debouncedSearch, category, sort]);
+
+  useEffect(() => {
+    fetchProducts(page, debouncedSearch, category, sort);
+  }, [page, debouncedSearch, category, sort]);
 
   return (
     <div className="min-h-screen bg-[#faf9f6]">
@@ -93,56 +153,20 @@ export default function ShopPage() {
           </div>
         </div>
 
+        <aside className="hidden md:flex md:w-64 md:flex-shrink-0 md:flex-col md:gap-8">
+          {renderFilters()}
+        </aside>
+
         {/* Sidebar / Filters */}
         <AnimatePresence>
-          {(showMobileFilters || typeof window !== 'undefined' && window.innerWidth >= 768) && (
+          {showMobileFilters && (
             <motion.aside 
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="w-full md:w-64 flex-shrink-0 flex flex-col gap-8 md:!h-auto md:!opacity-100 overflow-hidden md:overflow-visible"
+              className="w-full flex-shrink-0 flex flex-col gap-8 overflow-hidden md:hidden"
             >
-              {/* Search */}
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <Search size={18} className="text-[var(--color-primary)]" />
-                  Search
-                </h3>
-                <input 
-                  type="text" 
-                  placeholder="Find your snack..."
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] bg-gray-50 focus:bg-white transition"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-
-              {/* Categories */}
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-900 mb-4 inline-flex items-center gap-2">
-                  <PackageOpen size={18} className="text-[var(--color-primary)]" />
-                  Categories
-                </h3>
-                <div className="flex flex-col gap-2">
-                  {CATEGORIES.map(cat => (
-                    <button
-                      key={cat}
-                      onClick={() => {
-                        setCategory(cat);
-                        if (window.innerWidth < 768) setShowMobileFilters(false);
-                      }}
-                      className={`text-left px-4 py-2.5 rounded-xl capitalize font-medium transition-all ${
-                        category === cat 
-                        ? "bg-[var(--color-primary)] text-white shadow-md shadow-[var(--color-primary)]/20" 
-                        : "text-gray-600 hover:bg-gray-50 hover:text-[var(--color-primary)]"
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
+              {renderFilters(true)}
             </motion.aside>
           )}
         </AnimatePresence>
@@ -192,7 +216,7 @@ export default function ShopPage() {
                  <Search size={32} className="text-gray-400" />
                </div>
                <h3 className="text-2xl font-bold text-gray-900 mb-2">No products found</h3>
-               <p className="text-gray-500 max-w-sm">We couldn't find any products matching your current filters. Try adjusting your search or category.</p>
+               <p className="text-gray-500 max-w-sm">We couldn&apos;t find any products matching your current filters. Try adjusting your search or category.</p>
                <button 
                  onClick={() => { setSearch(""); setCategory("all"); }}
                  className="mt-6 bg-[var(--color-primary)]/10 text-[var(--color-primary)] px-6 py-3 rounded-xl font-bold hover:bg-[var(--color-primary)]/20 transition"
